@@ -39,14 +39,14 @@ def main():
     test_name = path + 'test.csv'
     # f = open(path + 'train.csv', 'rb')
 
-    readRows = 1000 #None for all
+    readRows = 5000 #None for all
     print 'loading train_data'
     train_data = pd.read_csv(train_name, nrows=readRows)
 
     print 'train_data loaded'
-    print train_data.head()
-    print train_data.dtypes
-    print train_data.columns
+    #print train_data.head()
+    #print train_data.dtypes
+    #print train_data.columns
 
     y_data = train_data['target'].values
     y_data = y_data.astype(float)
@@ -99,7 +99,7 @@ def main():
 
     # the point here is to understand what accuracy is
 
-    print acy
+    print 'accuracy:', acy
 
     #select_model(X_train, y_data)
 
@@ -133,7 +133,7 @@ def select_ests(X, y, nfeats, clf):
     return rks
 
 
-def cv(X, y, clf, nfeats, clfname, scoring=metrics.accuracy_score, n_folds=10):
+def cv(X, y, clf, nfeats, clfname, scoring=metrics.r2_score, n_folds=10):
 
     # returns an index for the train and test sets
     stratified_k_fold = cross_validation.StratifiedKFold(y, n_folds=n_folds)
@@ -143,7 +143,10 @@ def cv(X, y, clf, nfeats, clfname, scoring=metrics.accuracy_score, n_folds=10):
         X_train, X_test, y_train, y_test = X[train], X[test], y[train], y[test]
         clf.fit(X_train, y_train)
         y_pred = clf.predict(X_test)
+
         score = scoring(y_test, y_pred)
+        print 'r-squared:', score
+
         accuracy += score
     accuracy /= float(n_folds)
     return accuracy
@@ -211,7 +214,7 @@ def encode_impute(train_data):
         if tp == 'object':
             # get the name of the column
             # print i
-            print 'col name: ', nm, tp
+            #print 'col name: ', nm, tp
             # print 'grouping and count for this column', train_data.groupby(nm).size()
 
             # here we need to decide what to do with the rows that have Z values.
@@ -227,7 +230,7 @@ def encode_impute(train_data):
 
         else:
             nans = len(train_data[nm]) - train_data[nm].count()
-            print i, train_data[nm].min(), train_data[nm].mean(), train_data[nm].max(), nans
+            #print i, train_data[nm].min(), train_data[nm].mean(), train_data[nm].max(), nans
 
             imp = Imputer(missing_values='NaN', strategy='median', axis=0)
 
