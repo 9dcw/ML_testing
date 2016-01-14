@@ -39,7 +39,7 @@ def main():
     test_name = path + 'test.csv'
     # f = open(path + 'train.csv', 'rb')
 
-    readRows = 5000 #None for all
+    readRows = 2000 #None for all
     print 'loading train_data'
     train_data = pd.read_csv(train_name, nrows=readRows)
 
@@ -92,8 +92,6 @@ def main():
     rks = select_ests(X_train, y_data, 100, est_clf)
     X_train = X_train[:, rks]
 
-
-
     clf = svm.SVR(kernel='linear', C=1)
     acy = cv(X_train, y_data, clf, None, estimator_name(clf))
 
@@ -136,7 +134,11 @@ def select_ests(X, y, nfeats, clf):
 def cv(X, y, clf, nfeats, clfname, scoring=metrics.r2_score, n_folds=10):
 
     # returns an index for the train and test sets
-    stratified_k_fold = cross_validation.StratifiedKFold(y, n_folds=n_folds)
+
+    # stratified kfold is a classification thing that keeps the proportions similar for
+    # the different y values.. I need just straight KFold
+
+    stratified_k_fold = cross_validation.KFold(y, n_folds=n_folds)
     accuracy, ii = 0., 0
     for train, test in stratified_k_fold:
         ii += 1
@@ -145,7 +147,7 @@ def cv(X, y, clf, nfeats, clfname, scoring=metrics.r2_score, n_folds=10):
         y_pred = clf.predict(X_test)
 
         score = scoring(y_test, y_pred)
-        print 'r-squared:', score
+        print clfname, ii, 'r-squared:', score
 
         accuracy += score
     accuracy /= float(n_folds)
