@@ -1,10 +1,9 @@
 print 'loading libraries'
-from sklearn import datasets
+from sklearn import datasets, decomposition
 from sklearn import svm
 from sklearn.cross_validation import cross_val_predict
 from sklearn import linear_model
 import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectKBest
 from sklearn.pipeline import FeatureUnion
 from sklearn.pipeline import Pipeline
@@ -34,7 +33,19 @@ scaler = StandardScaler()
 
 
 # initialize PCA to pick 5 components
-pca = PCA(n_components=2)
+pca = decomposition.PCA(n_components=4)
+
+pcaX = scaler.fit_transform(X)
+pca.fit(pcaX)
+
+plt.figure(1, figsize=(4, 3))
+plt.clf()
+plt.plot(pca.explained_variance_ratio_, linewidth=2)
+plt.axis('tight')
+plt.xlabel('n_components')
+plt.ylabel('explained variance')
+plt.show()
+sys.exit()
 # initialize selectKBest to pick the best of the ones that occur naturally
 # the feature union does not check whether there is overlap between the estimators
 # so we need to seriously watch out for this...
@@ -55,18 +66,17 @@ pipeline = Pipeline([('scaler', scaler), ('features', combined_features), ('svm'
 
 param_grid = dict(features__pca__n_components=[2, 5, 10],
                   features__univ_select__k=[1, 2],
-                  svm__C=[0.1, 1, 10])from sklearn.grid_search import GridSearchCV
+                  svm__C=[0.1, 1, 10])
+
+#scoring: precision, accuracy, recall,
 
 grid_search = GridSearchCV(pipeline, param_grid=param_grid, verbose=10)
 grid_search.fit(X, y)
 print grid_search.best_estimator_
-sys.exit()
 
-lr = linear_model.LinearRegression()
+scores = grid_search.grid_scores_
 
-print X.shape, y.shape
-predicted = cross_val_predict(lr, X, y, cv=10)
-print predicted.shape
+
 fig, ax = plt.subplots()
 
 ax.scatter(y, predicted)
