@@ -1,5 +1,3 @@
-
-
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -33,11 +31,10 @@ fig, axs = plot_partial_dependence(clf, X_train, features, feature_names=names,
 fig.suptitle('Partial dependence of house value on nonlocation features\n' + 'for the California housing dataset')
 plt.subplots_adjust(top=0.9)
 
-sys.exit()
+plt.show()
+
 print '_' * 80
 print 'custom 3d plot via "partial_dependence'
-
-#def plot_partial_dependence(clf, X_train, features, feature_names, n_jobs)
 
 fig = plt.figure()
 
