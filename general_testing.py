@@ -1,16 +1,22 @@
 print 'loading libraries'
 from sklearn import datasets, decomposition
-from sklearn import svm
-from sklearn.cross_validation import cross_val_predict
-from sklearn import linear_model
+from sklearn.ensemble import GradientBoostingRegressor
+#from sklearn import svm
+#from sklearn.cross_validation import cross_val_predict
+#from sklearn import linear_model
 import matplotlib.pyplot as plt
 from sklearn.feature_selection import SelectKBest
 from sklearn.pipeline import FeatureUnion
 from sklearn.pipeline import Pipeline
 from sklearn.svm import SVR
+from sklearn import cross_validation
 from sklearn.preprocessing import StandardScaler
+from sklearn.cross_validation import KFold
 from sklearn.preprocessing import Imputer
 from sklearn import preprocessing
+from sklearn.ensemble.partial_dependence import plot_partial_dependence
+from sklearn.ensemble.partial_dependence import partial_dependence
+
 
 
 import sys
@@ -28,7 +34,6 @@ def main():
     print 'X shape:', X.shape
     print 'y shape:', y.shape
 
-
     scaler = StandardScaler()
 
     # I need to fit and transform the data with the scaler.. how do I put
@@ -36,13 +41,30 @@ def main():
 
 
     # initialize PCA to pick 5 components
-    pca = decomposition.PCA(n_components=4)
+    #pca = decomposition.PCA(n_components=4)
 
     scaledX = scaler.fit_transform(X)
+    #kf = cross_validation.KFold(scaledX, n_folds=3, shuffle=True)
+    X_train, X_test, y_train, y_test = cross_validation.train_test_split(scaledX, y)
 
-
-    # I want to build my cross validation picks
     # then I will plot partial dependence to see how the features work
+    clf = GradientBoostingRegressor(n_estimators=100, max_depth=4,
+                                    learning_rate=.1, loss='huber',
+                                    random_state=1)
+
+    print 'training', X_train.shape, y_train.shape
+    clf.fit(X_train, y_train)
+    print 'trained'
+
+    features = [0, 5, 1, 2, (5, 1)]
+    fig, axs = plot_partial_dependence(clf, X_train, features, feature_names=None,
+                                       n_jobs=3, grid_resolution=50)
+
+    fig.suptitle('Partial dependence of house value on nonlocation features\n' + 'for the California housing dataset')
+    plt.subplots_adjust(top=0.9)
+
+    plt.show()
+
     # then I will PCA and plot partial dependence there
     # then lasso PCA
 
@@ -51,31 +73,12 @@ def main():
 
     # then generate a list of multi-parameter algorithms
     # then do a parameter search with gradient boost and a few other multi-parameter algorithms
-    #
-
-    X_train, y_train, X_test, y_test =
-    
-    clf = GradientBoostingRegressor(n_estimators=100, max_depth=4,
-                                    learning_rate=.1, loss='huber',
-                                    random_state=1)
-
-    print 'training'
-    clf.fit(X_train, y_train)
-    print 'trained'
-
-    features = [0, 5, 1, 2, (5, 1)]
-    fig, axs = plot_partial_dependence(clf, X_train, features, feature_names=names,
-                                       n_jobs=3, grid_resolution=50)
-
-    fig.suptitle('Partial dependence of house value on nonlocation features\n' + 'for the California housing dataset')
-    plt.subplots_adjust(top=0.9)
-
-    plt.show()
 
 
+    return
 
-    pca.fit(pcaX)
 
+def old():
     plt.figure(1, figsize=(4, 3))
     plt.clf()
     plt.plot(pca.explained_variance_ratio_, linewidth=2)

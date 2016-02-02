@@ -20,6 +20,14 @@ from sklearn import metrics
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import Imputer
 from sklearn import preprocessing
+from sklearn.feature_selection import SelectFromModel
+from sklearn.linear_model import LassoCV
+from sklearn.linear_model import ElasticNetCV
+from sklearn.linear_model import lasso_path
+from sklearn.linear_model import enet_path
+
+from sklearn import cross_validation
+from sklearn.cross_validation import KFold
 
 plt.style.use('fivethirtyeight')
 _PLT_LEGEND_OPTIONS = dict(loc="upper center",
@@ -34,7 +42,7 @@ print 'loaded libraries'
 def main():
 
     path = '/users/davecwright/documents/kaggle/liberty_fire_cost/'
-
+    path = 'c:\\users\\dwright\\code\\'
     train_name = path + 'train.csv'
     test_name = path + 'test.csv'
     # f = open(path + 'train.csv', 'rb')
@@ -44,13 +52,54 @@ def main():
     train_data = pd.read_csv(train_name, nrows=readRows)
 
     print 'train_data loaded'
-    #print train_data.head()
-    #print train_data.dtypes
-    #print train_data.columns
-
     y_data = train_data['target'].values
+    train_data.drop('target', 1)
+    train_data = scrub(train_data)
     y_data = y_data.astype(float)
 
+    eps = 5e-3
+    X = train_data
+    y = y_data
+    folds = 10
+    kf = cross_validation.KFold(y_data.shape[0], n_folds=folds)
+    alphas = range(folds)
+    k = 0
+    for test, train in kf:
+        penalty = (alphas[k] + 1) * 1/folds
+        print alpha
+        clf = ElasticNet(l1_ratio=penalty, eps=eps)
+        clf.train(X, y)
+        # doing our own cv parametarization
+
+
+    print 'computing lasso path'
+    alphas_lasso, coefs_lasso, _ = lasso_path(X, y, eps, fit_intercept = False)
+    print 'computing enet path'
+    alphas_enet, coefs_enet, _ = enet_path(X, y, eps=eps, l1_ratio=0.8, fit_intercept=False)
+
+    plt.figure(1)
+    ax = plt.gca()
+    ax.set_color_cycle(2 * ['b', 'r', 'g', 'c', 'k'])
+    l1 = plt.plot(-np.log10(alphas_lasso), coefs_lasso.T)
+    l2 = plt.plot(-np.log10(alphas_enet), coefs_enet.T, linestyle='--')
+
+    plt.xlabel('-Log(alpha)')
+    plt.ylabel('coefficients')
+    plt.title('Lasso and Elastic-Net Paths')
+    plt.legend((l1[-1], l2[-1]), ('Lasso', 'Elastic-Net'), loc='lower left')
+    plt.axis('tight')
+    plt.show()
+    sys.exit()
+
+
+
+    for train_index, test_index in kf:
+        #print train_index, test_index
+        print train_data.iloc[train_index], train_data.iloc[test_index]
+
+
+    # I am implementing the lasso reduction here...
+    #for train, test in kf:
 
     fig = plt.figure(figsize=(12, 9))
     #ax = fig.add_subplot(111)
@@ -73,15 +122,6 @@ def main():
 
     # fill in missing values in the text variables and in the continuous variables
     # skip continuous for now
-
-    # A1. make everything numeric
-
-    train_data = encode_impute(train_data)
-    # A2. standardize the feature scales
-
-    scaler = StandardScaler()
-    scaler.fit(train_data)
-    X_train = scaler.transform(train_data)
 
     # A3. build new features through the interactions of various items
     # skip for now
@@ -112,9 +152,21 @@ def main():
     # here I need to plot out the data and the results... maybe just a quick plot of the results first?
     # I don't know what accuracy or scoring mean..
 
-    print 'done?'
-
     # should be doing the parameter search next... I'm skipping that and moving to the model..
+
+
+def scrub(train_data):
+
+    # A1. make everything numeric
+
+    train_data = encode_impute(train_data)
+    # A2. standardize the feature scales
+
+    scaler = StandardScaler()
+    scaler.fit(train_data)
+    X_train = scaler.transform(train_data)
+
+    return X_train
 
 
 def estimator_name(clf):
@@ -241,6 +293,38 @@ def encode_impute(train_data):
     print 'test train_data shape', train_data.shape
     return train_data
 
+def lasso_reducer(X, y):
+
+    clf = LassoCV()
+
+    # Set a minimum threshold of 0.25
+    # this is a 'maxing out' of the sum of all coefficients
+    sfm = SelectFromModel(clf, threshold=0.25)
+    sfm.fit(X, y)
+
+    n_features = sfm.transform(X).shape[1]
+
+    # reset the threshold until the number of features equals two.
+    # Note that the attribute can be set directly instead of repeatedley
+    # fitting the metatransformer.
+    while n_features > 2:
+        sfm.threshold += 0.1
+        X_transform = sfm.transform(X)
+        n_features = X_transform.shape[1]
+
+    # Plot the seelcted two features from X.
+    plt.title('features selected from boston using the SelectFromModel with'
+              'threshold of %0.3f.' % sfm.threshold)
+
+    feature1 = X_transform[:, 0]
+    feature2 = X_transform[:, 1]
+    plt.plot(feature1, feature2, 'r.')
+    plt.xlabel("Value of Feature number 1")
+    plt.ylabel("Value of Feature number 2")
+    plt.ylim([np.min(feature2), np.max(feature2)])
+    plt.show()
+
+    return
 
 def drop_nans(df):
     x = 0
