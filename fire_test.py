@@ -277,7 +277,7 @@ def encode_impute(train_data):
 
             # this creates many columns from one. We need to deal with that by adding
             # them in gracefully... append at the end?
-            enc.fit(train_data[nm])
+             enc.fit(train_data[nm])
             train_enc = enc.transform(train_data[nm])
             train_data = train_data.drop(nm, 1)
             train_data = pd.concat((train_data, pd.DataFrame(train_enc)), 1)

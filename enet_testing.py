@@ -20,7 +20,7 @@ def main():
         print alpha, l1
         enet = ElasticNet(alpha=alpha, l1_ratio=l1)
         y_pred = enet.fit(X[traini], y[traini]).predict(X[testi])
-        score = r2_score(y[testi, y_pred])
+        score = r2_score(y[testi], y_pred)
         print score
 
 
