@@ -26,7 +26,7 @@ def main():
     #map.drawstates(linewidth=.25)
     #map.drawcounties(linewidth=.1)
 
-    shapepath = 'C:\\Users\\dwright\\code\\county_files\\cb_2014_us_county_20m'
+    shapepath = 'C:\\Users\\dwright\\code\\county_files\\cb_2014_us_county_20m_converted'
 
     targetStates = ['VA']
     targetCounties = {'Accomack': 'red', 'Amelia': 'yellow'}
@@ -36,14 +36,14 @@ def main():
     if tp not in [0, 1, 3, 5, 8]:
         shapepath = convertShapefile(shapepath)
 
-    #for targetState in targetStates:
-    #    for targetCounty in targetCounties.keys():
-            #statePath = getShapeFile(targetState, targetCounty, shapepath)
     patches = []
-    col = targetCounties[targetCounty]
     map.readshapefile(shapepath, 'counties', drawbounds=True)
+    # info are the fields
     for info, shape in zip(map.counties_info, map.counties):
-        if info['nombre'] == 'Accomack':
+        #print info
+        print 'name', info['NAME']
+        col = (.5,.2,.3)#targetCounties[info['NAME']]
+        if info['NAME'] == 'Accomack':
             patches.append(Polygon(np.array(shape), True))
             ax.add_collection(PatchCollection(patches, facecolor=col, edgecolor='black',
                                               linewidths=1., zorder=2))
@@ -56,7 +56,6 @@ def main():
     # draw the edge of the map projection region (the projection limb)
     map.drawmapboundary(fill_color='aqua')
     # draw lat/lon grid lines every 30 degrees.
-
 
     # compute native map projection coordinates of lat/lon grid.
 
