@@ -75,8 +75,6 @@ def getShapeFile(state, county, path):
     # is it not possible for me to pass a shapefile around without
     # writing it to disk? come on!
 
-
-
     return outPath
 
 def convertShapefile(read_path):
