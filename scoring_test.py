@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 #from sklearn.cross_validation import train_test_split
 from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.ensemble import RandomForestRegressor
 #from sklearn.ensemble.partial_dependence import plot_partial_dependence
 #from sklearn.linear_model import Lasso
 from sklearn.linear_model import ElasticNet
@@ -63,27 +64,36 @@ def main():
         r2 = r2_score(y_test, y_pred)
         print 'inear score:', r2_lin, 'boost score:', r2
 
-        # then I want to chart the various accuracy measures
-        # then I try another model and try that.
+    randforest = RandomForestRegressor()
 
-        # I also want to look into seaborn and see what there is in there that I can use
-        # I'm going to want to learn how lasso can work with binarized features
-        # and comb through the various regression models and learn the math
-        # and work through the parameter search!
+    # let's fit a random forest!
+    randforest.fit(X_train, y)
+    # ok now what??!?!?
 
-        # features = range(len(featureNames))
-        # partial dependence isn't going to work here because we are encoding the labels...
-        # I will need to figure out how to do the binary label encoding better!
+    # would be useful to find the most important variables and plot those against loss cost
+    # bow do we do feature pruning with random forests?
 
-        #fig, axs = plot_partial_dependence(clf, X_train, features=features, feature_names=featureNames,
-        #                                   n_jobs=3, grid_resolution=50)
+    # then I want to chart the various accuracy measures
+    # then I try another model and try that.
 
-        # how about we do some grid search plotting!
-        # or just a simple linear regression on the features
-        # run it!
-        # plt.show()
+    # I also want to look into seaborn and see what there is in there that I can use
+    # I'm going to want to learn how lasso can work with binarized features
+    # and comb through the various regression models and learn the math
+    # and work through the parameter search!
 
-        # then the relative predictive power
+    # features = range(len(featureNames))
+    # partial dependence isn't going to work here because we are encoding the labels...
+    # I will need to figure out how to do the binary label encoding better!
+
+    #fig, axs = plot_partial_dependence(clf, X_train, features=features, feature_names=featureNames,
+    #                                   n_jobs=3, grid_resolution=50)
+
+    # how about we do some grid search plotting!
+    # or just a simple linear regression on the features
+    # run it!
+    # plt.show()
+
+    # then the relative predictive power
 
 
 def preprocess(train_data):
