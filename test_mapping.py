@@ -16,13 +16,19 @@ def main():
 
     fig = plt.figure()
     ax = fig.add_subplot(111)
+    minLon = -123
+    minLat = 20
+    maxLon = -65
+    maxLat = 48
+    centerLat = (minLat + maxLat) / 2
+    centerLon = (minLon + maxLon) / 2
 
-    map = Basemap(llcrnrlon=-80.,llcrnrlat=35.,urcrnrlon=-70.,urcrnrlat=42.,
-                  projection='aeqd', lat_0=37.533, lon_0=-77.46, resolution='l')
+    map = Basemap(llcrnrlon=minLon,llcrnrlat=minLat,urcrnrlon=maxLon,urcrnrlat=maxLat,
+                  projection='aeqd', lat_0=centerLat, lon_0=centerLon, resolution='l')
     # draw coastlines, country boundaries, fill continents.
     map.drawcoastlines(linewidth=0.25)
     map.drawcountries(linewidth=0.25)
-    map.fillcontinents(color='green', lake_color='aqua')
+    map.fillcontinents(color=(.8,.8,.8), lake_color='aqua')
     #map.drawstates(linewidth=.25)
     #map.drawcounties(linewidth=.1)
 
@@ -41,7 +47,7 @@ def main():
     # info are the fields
     for info, shape in zip(map.counties_info, map.counties):
         #print info
-        print 'name', info['NAME']
+        #print 'name', info['NAME']
         col = (.5,.2,.3)#targetCounties[info['NAME']]
         if info['NAME'] == 'Accomack':
             patches.append(Polygon(np.array(shape), True))
