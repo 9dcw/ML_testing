@@ -18,9 +18,13 @@ def mapping(states, targetCounties, checkPoints, clientName):
     # use low resolution coastlines.
 
     #print 'shapepath'
-    shapepath = 'C:\\Users\\dwright\\code\\county_files\\cb_2014_us_county_20m_converted'
+    shapepath = 'C:\\Users\\dwright\\code\\geo_shapes\\cb_2014_us_county_20m_converted'
 
-    testShape = shapefile.Reader(shapepath)
+    try:
+        testShape = shapefile.Reader(shapepath)
+    except Exception as e:
+        shapepath = convertShapefile(shapepath.replace('_converted', ''))
+        testShape = shapefile.Reader(shapepath)
 
     tp = testShape.shapeType
     if tp not in [0, 1, 3, 5, 8]:
