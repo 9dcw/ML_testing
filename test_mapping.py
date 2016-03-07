@@ -6,20 +6,42 @@ import matplotlib.pyplot as plt
 import numpy as np
 import shapefile
 import sys
+import random
+import csv
+import pandas as pd
+import matplotlib as mpl
 
-
-def main():
+def mapping(states, targetCounties, checkPoints, clientName):
 
     # set up orthographic map projection with
     # perspective of satellite looking down at 50N, 100W.
     # use low resolution coastlines.
 
+    #print 'shapepath'
+    shapepath = 'C:\\Users\\dwright\\code\\county_files\\cb_2014_us_county_20m_converted'
+
+    testShape = shapefile.Reader(shapepath)
+
+    tp = testShape.shapeType
+    if tp not in [0, 1, 3, 5, 8]:
+        shapepath = convertShapefile(shapepath)
+
+    f = open('C:\\Users\\dwright\\code\\state_codes.csv','rb')
+    rdr = csv.reader(f)
+    rdr.next()
+    stateLookup = {i[2].zfill(2):i[1] for i in rdr}
+    codeLookup = {stateLookup[i]:i for i in stateLookup.keys()}
+
+    stateCodes = [codeLookup[i] for i in states]
+    minLat, minLon, maxLat, maxLon = getBoundaries(shapepath, targetCounties, stateCodes)
+
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    minLon = -123
-    minLat = 20
-    maxLon = -65
-    maxLat = 48
+    #minLon = -123
+    #minLat = 20
+    #maxLon = -65
+    #maxLat = 48
+    print 'coordinate boundaries', minLat, minLon, maxLat, maxLon
     centerLat = (minLat + maxLat) / 2
     centerLon = (minLon + maxLon) / 2
 
@@ -28,34 +50,52 @@ def main():
     # draw coastlines, country boundaries, fill continents.
     map.drawcoastlines(linewidth=0.25)
     map.drawcountries(linewidth=0.25)
-    map.fillcontinents(color=(.8,.8,.8), lake_color='aqua')
-    #map.drawstates(linewidth=.25)
+    #map.fillcontinents(color=(.8,.8,.8), lake_color='aqua')
+    #map.fillcontinents(lake_color='aqua')
+    #map.drawstates(linewidth=4)
+    map.shadedrelief()
     #map.drawcounties(linewidth=.1)
 
-    shapepath = 'C:\\Users\\dwright\\code\\county_files\\cb_2014_us_county_20m_converted'
-
-    targetStates = ['VA']
-    targetCounties = {'Accomack': 'red', 'Amelia': 'yellow'}
-
-    testShape = shapefile.Reader(shapepath)
-    tp = testShape.shapeType
-    if tp not in [0, 1, 3, 5, 8]:
-        shapepath = convertShapefile(shapepath)
-
-    patches = []
     map.readshapefile(shapepath, 'counties', drawbounds=True)
     # info are the fields
     for info, shape in zip(map.counties_info, map.counties):
         #print info
+        #print shape
         #print 'name', info['NAME']
-        col = (.5,.2,.3)#targetCounties[info['NAME']]
-        if info['NAME'] == 'Accomack':
+        #sys.exit()
+        patches = []
+        #print info['NAME'] + '_' + stateLookup[info['STATEFP']]
+        if stateLookup[info['STATEFP']] + '_' + info['NAME'] in targetCounties.keys():
+            col = targetCounties[stateLookup[info['STATEFP']] + '_' + info['NAME']][0]
+            origValue = targetCounties[stateLookup[info['STATEFP']] + '_' + info['NAME']][1]
             patches.append(Polygon(np.array(shape), True))
             ax.add_collection(PatchCollection(patches, facecolor=col, edgecolor='black',
-                                              linewidths=1., zorder=2))
-            # google "filling shapefile polygons"
-            plt.show()
-            sys.exit()
+                                              linewidths=1., zorder=2, alpha=0.5))
+
+    cols = [checkPoints['bottom'][1], checkPoints['mid'][1], checkPoints['top'][1]]
+    print cols
+
+    cmap = mpl.colors.ListedColormap(cols)
+    cmap.set_over('1')
+    cmap.set_under('0')
+
+    # length of boundary array needs to be one more than length of color list
+    # and needs to be monotonically increasing
+
+    #bounds = [checkPoints['bottom'][0] -1,checkPoints['bottom'][0], checkPoints['mid'][0], checkPoints['top'][0]]
+    #print bounds
+    #norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
+    cb = mpl.colorbar.ColorbarBase(ax, cmap=cmap, norm=norm#, boundaries=bounds
+                                   , extend='both',
+                                # Make the length of each extension
+                                # the same as the length of the
+                                # interior colors:
+                                extendfrac='auto', ticks=bounds, spacing='uniform', orientation='horizontal')
+
+    #cb.set_label('Custom extension lengths, some other units')
+    # lon, lat =
+    #xpt, ypt = map(lon, lat)
+    #lonpt, latpt = map(xpt, ypt, inverse=True)
     # I can also find the center of the county and name it!
     # will need to figure out eh size of the name
 
@@ -63,14 +103,13 @@ def main():
     map.drawmapboundary(fill_color='aqua')
     # draw lat/lon grid lines every 30 degrees.
 
-    # compute native map projection coordinates of lat/lon grid.
-
-    #x, y = map(lons*180./np.pi, lats*180./np.pi)
-    # contour data over the map.
-
-    #cs = map.contour(x,y,wave+mean,15,linewidths=1.5)
-    plt.title('contour lines over filled continent background')
+    title = 'Exposure Heatmap for {0}'.format(clientName)
+    plt.title(title)
+    outFileName = 'ExposureMap_{0}'.format(clientName)
+    outPath = 'c:\\users\\dwright\\dropbox\\{0}.jpg'.format(outFileName)
+    #plt.savefig(outPath)
     plt.show()
+    plt.clf()
 
     return
 
@@ -83,8 +122,43 @@ def getShapeFile(state, county, path):
 
     return outPath
 
-def convertShapefile(read_path):
+def getBoundaries(read_path, counties, stateCodes):
+    sf = shapefile.Reader(read_path)
+    tp = sf.shapeType
+    shapeRecs = sf.records()
+    shapeShapes = sf.shapes()
+    shapeFields = sf.fields
+    shapeIndices = range(len(shapeRecs))
+    #print sf.fields
+    minLon = 0
+    maxLon = 0
+    maxLat = 0
+    minLat = 0
+    for i in shapeIndices:
+        shpe = shapeShapes[i].points
+        rec = shapeRecs[i]
+        shpeAr = np.array(shpe)
+        #print rec
 
+        if rec[0] in stateCodes:
+            #print shpeAr
+
+            thisLon, thisLat = np.amin(shpeAr, 0)
+            if minLon == 0 or minLon > thisLon:
+                minLon = thisLon
+            if minLat == 0 or minLat > thisLon:
+                minLat = thisLat
+
+            thisLon, thisLat = np.amax(shpeAr, 0)
+            if maxLon == 0 or maxLon < thisLon:
+                maxLon = thisLon
+            if maxLat == 0 or maxLat < thisLon:
+                maxLat = thisLat
+
+    return minLat - 1, minLon - 1, maxLat+ 1, maxLon+ 1
+
+def convertShapefile(read_path):
+    print 'converting shapefile'
     sf = shapefile.Reader(read_path)
     tp = sf.shapeType
     print tp
@@ -142,6 +216,85 @@ def convertShapefile(read_path):
 
     return write_path
 
+def getData(fname, bottomPercentile, midPoint, topPercentile):
+
+    p = 'c:\\users\\dwright\\dropbox\\'
+
+    baseData = pd.DataFrame.from_csv(p + fname, index_col=False)
+    origValues = baseData.ix[:, 0]
+    #print baseData
+    #print baseData.ix[:,0]
+    midPoint = 0.5
+    bottom = baseData.ix[:, 0].astype('float').quantile(bottomPercentile)
+    top = baseData.ix[:, 0].astype('float').quantile(topPercentile)
+    dataMid = baseData.ix[:, 0].astype('float').quantile(midPoint)
+
+    dataRange = top - bottom
+
+    # cap the data at the top
+    baseData.ix[baseData.ix[:,0] > top, 0] = top
+    # subtract the bottom
+    baseData.ix[:,0] = baseData.ix[:,0] - bottom
+    # minimize at 0
+    baseData.ix[baseData.ix[:,0] < 0, 0] = 0
+    baseData.ix[baseData.ix[:,0] > 1, 0] = baseData.ix[:,0] / (dataRange)
+
+    # these are the three colors we are using as the range
+    low = [255, 51, 51]
+    med = [255, 255, 102]
+    high = [102, 255, 102]
+    low = [i/float(255) for i in low]
+    med = [i/float(255) for i in med]
+    high = [i/float(255) for i in high]
+
+    locs = baseData.shape[0]
+    r = pd.DataFrame({'r': baseData.ix[:, 0]})
+    g = pd.DataFrame({'g': baseData.ix[:, 0]})
+    b = pd.DataFrame({'b': baseData.ix[:, 0]})
+
+    #here I am working on doing this with matrices
+    lowAr = np.tile(np.array(low), (locs,1))
+    medAr = np.tile(np.array(med), (locs,1))
+    highAr = np.tile(np.array(high), (locs,1))
+    targetCounties = dict()
+    for i in range(locs):
+        test = baseData.ix[i, 0]
+        # here we check against midPoint, which is 0.5 by default
+        if test < midPoint:
+            rs = ((med[0] - low[0]) * test / midPoint + low[0])
+            gs = ((med[1] - low[1]) * test / midPoint + low[1])
+            bs = ((med[2] - low[2]) * test / midPoint + low[2])
+        else:
+            rs = ((high[0] - med[0]) * (test - midPoint) / (1-midPoint) + med[0])
+            gs = ((high[1] - med[1]) * (test - midPoint) / (1-midPoint) + med[1])
+            bs = ((high[2] - med[2]) * (test - midPoint) / (1-midPoint) + med[2])
+        r.ix[i, 0] = rs
+        g.ix[i, 0] = gs
+        b.ix[i, 0] = bs
+        stateName = str(baseData.ix[i, 1]).upper()
+        countyName = str(baseData.ix[i, 2]).replace(' COUNTY', '').title()
+        targetCounties[stateName + '_' + countyName] = ((rs, gs, bs), origValues.ix[i, 0])
+
+    states = baseData.ix[:, 1].unique()
+    #add = pd.concat([r,g,b], axis=1)
+    #outData = pd.concat([baseData, add], axis=1)
+
+    checkPoints = {'bottom': (bottom, low), 'mid': (dataMid, med), 'top': (top, high)}
+    return states, targetCounties, checkPoints
+
+def main():
+
+    bottomPercentile = 0
+    midPoint = 0.5
+    topPercentile = 1
+    for clientName in ['Loudoun', 'GUA']:
+
+        fname = 'Auto_{0}Exposure.csv'.format(clientName)
+
+        print 'getting data for', clientName
+        targetStates, targetCounties, checkPoints = getData(fname, bottomPercentile, midPoint, topPercentile)
+        print 'mapping', clientName
+        mapping(targetStates, targetCounties, checkPoints, clientName)
 
 if __name__ == '__main__':
     main()
