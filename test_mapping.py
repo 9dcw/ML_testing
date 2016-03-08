@@ -10,25 +10,26 @@ import random
 import csv
 import pandas as pd
 import matplotlib as mpl
+import os
 
 def mapping(states, targetCounties, checkPoints, clientName):
 
-    # set up orthographic map projection with
-    # perspective of satellite looking down at 50N, 100W.
-    # use low resolution coastlines.
+    shapePathRoot = 'C:\\Users\\dwright\\code\\geo_shapes\\'
+    countyShapeName = 'cb_2014_us_county_500k'
 
-    #print 'shapepath'
-    shapepath = 'C:\\Users\\dwright\\code\\geo_shapes\\cb_2014_us_county_20m_converted'
 
-    try:
-        testShape = shapefile.Reader(shapepath)
-    except Exception as e:
-        shapepath = convertShapefile(shapepath.replace('_converted', ''))
-        testShape = shapefile.Reader(shapepath)
+    shapePathCounty = manageShapeFile(shapePathRoot, countyShapeName)
+    print shapePathCounty
 
-    tp = testShape.shapeType
-    if tp not in [0, 1, 3, 5, 8]:
-        shapepath = convertShapefile(shapepath)
+    #testShape = shapefile.Reader(shapePathCounty)
+
+    stateShapeName = 'cb_2014_us_state_500k'
+    shapePathState = manageShapeFile(shapePathRoot, stateShapeName)
+    stateShape = shapefile.Reader(shapePathState)
+
+    #tp = testShape.shapeType
+    #if tp not in [0, 1, 3, 5, 8]:
+    #    shapepath = convertShapefile(shapePathCounty)
 
     f = open('C:\\Users\\dwright\\code\\state_codes.csv','rb')
     rdr = csv.reader(f)
@@ -37,7 +38,7 @@ def mapping(states, targetCounties, checkPoints, clientName):
     codeLookup = {stateLookup[i]:i for i in stateLookup.keys()}
 
     stateCodes = [codeLookup[i] for i in states]
-    minLat, minLon, maxLat, maxLon = getBoundaries(shapepath, targetCounties, stateCodes)
+    minLat, minLon, maxLat, maxLon = getBoundaries(shapePathCounty, targetCounties, stateCodes)
 
     fig = plt.figure()
     # axes: left, bottom, width, height
@@ -47,7 +48,7 @@ def mapping(states, targetCounties, checkPoints, clientName):
     # so subplot2grid(100,1)uses 100 rows and 1 column
     # the
     ax1 = plt.subplot2grid((100, 1), (0, 0), rowspan=80)
-    ax2 = plt.subplot2grid((100, 1), (89, 0))
+    #ax2 = plt.subplot2grid((100, 1), (89, 0))
     #ax2.get_yaxis().set_visible(False)
     #ax2.get_xaxis().set_visible(False)
 
@@ -55,10 +56,6 @@ def mapping(states, targetCounties, checkPoints, clientName):
     #ax2 = fig.add_axes([.05, .05, .8, .2])
     #ax1 = fig.add_axes([.05, .3, .9, .6])
 
-    #minLon = -123
-    #minLat = 20
-    #maxLon = -65
-    #maxLat = 48
     print 'coordinate boundaries', minLat, minLon, maxLat, maxLon
     centerLat = (minLat + maxLat) / 2
     centerLon = (minLon + maxLon) / 2
@@ -74,7 +71,9 @@ def mapping(states, targetCounties, checkPoints, clientName):
     map.shadedrelief()
     #map.drawcounties(linewidth=.1)
 
-    map.readshapefile(shapepath, 'counties', drawbounds=True)
+
+    map.readshapefile(shapePathCounty, 'counties', drawbounds=True)
+
     # info are the fields
     for info, shape in zip(map.counties_info, map.counties):
         #print info
@@ -90,9 +89,9 @@ def mapping(states, targetCounties, checkPoints, clientName):
             ax1.add_collection(PatchCollection(patches, facecolor=col, edgecolor='black',
                                               linewidths=1., zorder=2, alpha=0.5))
 
-
     cols = [checkPoints['bottom'][1], checkPoints['mid'][1], checkPoints['top'][1]]
     print cols
+
     cmap = mpl.colors.ListedColormap(cols)
     cmap.set_over('1')
     cmap.set_under('0')
@@ -103,7 +102,8 @@ def mapping(states, targetCounties, checkPoints, clientName):
     #bounds = [checkPoints['bottom'][0] -1,checkPoints['bottom'][0], checkPoints['mid'][0], checkPoints['top'][0]]
     #print bounds
     #norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
-    #cb = mpl.colorbar.ColorbarBase(ax2, cmap=cmap, norm=norm#, boundaries=bounds , extend='both',
+    #cb = mpl.colorbar.ColorbarBase(ax, cmap=cmap, norm=norm#, boundaries=bounds
+    #                               , extend='both',
                                 # Make the length of each extension
                                 # the same as the length of the
                                 # interior colors:
@@ -121,16 +121,34 @@ def mapping(states, targetCounties, checkPoints, clientName):
     # draw lat/lon grid lines every 30 degrees.
 
     title = 'Exposure Heatmap for {0}'.format(clientName)
-    #plt.title(title)
+    plt.title(title)
     outFileName = 'ExposureMap_{0}'.format(clientName)
     outPath = 'c:\\users\\dwright\\dropbox\\{0}.jpg'.format(outFileName)
 
     plt.tight_layout()
-    #plt.savefig(outPath)
-    plt.show()
+    plt.savefig(outPath)
+    #plt.show()
     plt.clf()
 
     return
+
+def manageShapeFile(shapePathRoot, shapeName):
+
+    shapeFileList = os.listdir(shapePathRoot)
+    convertedName = shapeName + '_converted' + '.shp'
+    print shapeName
+    if shapeName + '.shp' not in shapeFileList:
+        print 'no shape file', shapeName + '.shp'
+        sys.exit()
+    # test if we need to convert
+    elif convertedName not in shapeFileList:
+        shapePath = convertShapefile(shapePathRoot + shapeName)
+    # no need to convert
+    else:
+        shapePath = shapePathRoot + convertedName
+
+    shapePath = shapePath.replace('.shp', '')
+    return shapePath
 
 
 def getShapeFile(state, county, path):
@@ -142,6 +160,7 @@ def getShapeFile(state, county, path):
     return outPath
 
 def getBoundaries(read_path, counties, stateCodes):
+    print 'getting boundaries for:', stateCodes
     sf = shapefile.Reader(read_path)
     tp = sf.shapeType
     shapeRecs = sf.records()
@@ -235,9 +254,7 @@ def convertShapefile(read_path):
 
     return write_path
 
-def getData(fname, bottomPercentile, midPoint, topPercentile):
-
-    p = 'c:\\users\\dwright\\dropbox\\'
+def getData(fname, bottomPercentile, midPoint, topPercentile, p):
 
     baseData = pd.DataFrame.from_csv(p + fname, index_col=False)
     origValues = baseData.ix[:, 0]
@@ -294,7 +311,6 @@ def getData(fname, bottomPercentile, midPoint, topPercentile):
         countyName = str(baseData.ix[i, 2]).replace(' COUNTY', '').title()
         targetCounties[stateName + '_' + countyName] = ((rs, gs, bs), origValues.ix[i, 0])
 
-
     states = baseData.ix[:, 1].unique()
     #add = pd.concat([r,g,b], axis=1)
     #outData = pd.concat([baseData, add], axis=1)
@@ -307,15 +323,19 @@ def main():
     bottomPercentile = 0
     midPoint = 0.5
     topPercentile = 1
-    #for clientName in ['Loudoun', 'GUA']:
-    for clientName in ['Orchid']:
+    p = 'c:\\users\\dwright\\dropbox\\'
+    #p = '\\\\BA-FS-NY\Data\\Yr 2016\\Orchid\\Spinnaker Project\\Cat Modeling\\'
 
-        fname = 'Auto_{0}Exposure.csv'.format(clientName)
+
+    #for clientName in ['Orchid','Reference']:
+    for clientName in ['Loudoun', 'GUA']:
+
+        fname = '{0}Exposure.csv'.format(clientName)
 
         print 'getting data for', clientName
-        targetStates, targetCounties, checkPoints = getData(fname, bottomPercentile, midPoint, topPercentile)
+        targetStates, targetCounties, checkPoints = getData(fname, bottomPercentile, midPoint, topPercentile, p)
         print 'mapping', clientName
         mapping(targetStates, targetCounties, checkPoints, clientName)
-        sys.exit()
+
 if __name__ == '__main__':
     main()
