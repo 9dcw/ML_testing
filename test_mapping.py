@@ -40,7 +40,21 @@ def mapping(states, targetCounties, checkPoints, clientName):
     minLat, minLon, maxLat, maxLon = getBoundaries(shapepath, targetCounties, stateCodes)
 
     fig = plt.figure()
-    ax = fig.add_subplot(111)
+    # axes: left, bottom, width, height
+
+    # building two subplots, one for the map and one for the colorbar
+    # this function sets how many 'rows and columns' are used
+    # so subplot2grid(100,1)uses 100 rows and 1 column
+    # the
+    ax1 = plt.subplot2grid((100, 1), (0, 0), rowspan=80)
+    ax2 = plt.subplot2grid((100, 1), (89, 0))
+    #ax2.get_yaxis().set_visible(False)
+    #ax2.get_xaxis().set_visible(False)
+
+    #ax2 = fig.add_subplot(211)
+    #ax2 = fig.add_axes([.05, .05, .8, .2])
+    #ax1 = fig.add_axes([.05, .3, .9, .6])
+
     #minLon = -123
     #minLat = 20
     #maxLon = -65
@@ -73,12 +87,12 @@ def mapping(states, targetCounties, checkPoints, clientName):
             col = targetCounties[stateLookup[info['STATEFP']] + '_' + info['NAME']][0]
             origValue = targetCounties[stateLookup[info['STATEFP']] + '_' + info['NAME']][1]
             patches.append(Polygon(np.array(shape), True))
-            ax.add_collection(PatchCollection(patches, facecolor=col, edgecolor='black',
+            ax1.add_collection(PatchCollection(patches, facecolor=col, edgecolor='black',
                                               linewidths=1., zorder=2, alpha=0.5))
+
 
     cols = [checkPoints['bottom'][1], checkPoints['mid'][1], checkPoints['top'][1]]
     print cols
-
     cmap = mpl.colors.ListedColormap(cols)
     cmap.set_over('1')
     cmap.set_under('0')
@@ -89,12 +103,11 @@ def mapping(states, targetCounties, checkPoints, clientName):
     #bounds = [checkPoints['bottom'][0] -1,checkPoints['bottom'][0], checkPoints['mid'][0], checkPoints['top'][0]]
     #print bounds
     #norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
-    cb = mpl.colorbar.ColorbarBase(ax, cmap=cmap, norm=norm#, boundaries=bounds
-                                   , extend='both',
+    #cb = mpl.colorbar.ColorbarBase(ax2, cmap=cmap, norm=norm#, boundaries=bounds , extend='both',
                                 # Make the length of each extension
                                 # the same as the length of the
                                 # interior colors:
-                                extendfrac='auto', ticks=bounds, spacing='uniform', orientation='horizontal')
+    #                            extendfrac='auto', ticks=bounds, spacing='uniform', orientation='horizontal')
 
     #cb.set_label('Custom extension lengths, some other units')
     # lon, lat =
@@ -108,9 +121,11 @@ def mapping(states, targetCounties, checkPoints, clientName):
     # draw lat/lon grid lines every 30 degrees.
 
     title = 'Exposure Heatmap for {0}'.format(clientName)
-    plt.title(title)
+    #plt.title(title)
     outFileName = 'ExposureMap_{0}'.format(clientName)
     outPath = 'c:\\users\\dwright\\dropbox\\{0}.jpg'.format(outFileName)
+
+    plt.tight_layout()
     #plt.savefig(outPath)
     plt.show()
     plt.clf()
@@ -150,13 +165,13 @@ def getBoundaries(read_path, counties, stateCodes):
             thisLon, thisLat = np.amin(shpeAr, 0)
             if minLon == 0 or minLon > thisLon:
                 minLon = thisLon
-            if minLat == 0 or minLat > thisLon:
+            if minLat == 0 or minLat > thisLat:
                 minLat = thisLat
 
             thisLon, thisLat = np.amax(shpeAr, 0)
             if maxLon == 0 or maxLon < thisLon:
                 maxLon = thisLon
-            if maxLat == 0 or maxLat < thisLon:
+            if maxLat == 0 or maxLat < thisLat:
                 maxLat = thisLat
 
     return minLat - 1, minLon - 1, maxLat+ 1, maxLon+ 1
@@ -279,6 +294,7 @@ def getData(fname, bottomPercentile, midPoint, topPercentile):
         countyName = str(baseData.ix[i, 2]).replace(' COUNTY', '').title()
         targetCounties[stateName + '_' + countyName] = ((rs, gs, bs), origValues.ix[i, 0])
 
+
     states = baseData.ix[:, 1].unique()
     #add = pd.concat([r,g,b], axis=1)
     #outData = pd.concat([baseData, add], axis=1)
@@ -291,7 +307,8 @@ def main():
     bottomPercentile = 0
     midPoint = 0.5
     topPercentile = 1
-    for clientName in ['Loudoun', 'GUA']:
+    #for clientName in ['Loudoun', 'GUA']:
+    for clientName in ['Orchid']:
 
         fname = 'Auto_{0}Exposure.csv'.format(clientName)
 
@@ -299,6 +316,6 @@ def main():
         targetStates, targetCounties, checkPoints = getData(fname, bottomPercentile, midPoint, topPercentile)
         print 'mapping', clientName
         mapping(targetStates, targetCounties, checkPoints, clientName)
-
+        sys.exit()
 if __name__ == '__main__':
     main()
