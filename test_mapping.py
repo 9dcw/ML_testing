@@ -89,6 +89,8 @@ def mapping(states, targetCounties, checkPoints, clientName):
             ax1.add_collection(PatchCollection(patches, facecolor=col, edgecolor='black',
                                               linewidths=1., zorder=2, alpha=0.5))
 
+    map.readshapefile(shapePathState, 'states', drawbounds=True, linewidth=1)
+
     cols = [checkPoints['bottom'][1], checkPoints['mid'][1], checkPoints['top'][1]]
     print cols
 
@@ -126,8 +128,8 @@ def mapping(states, targetCounties, checkPoints, clientName):
     outPath = 'c:\\users\\dwright\\dropbox\\{0}.jpg'.format(outFileName)
 
     plt.tight_layout()
-    plt.savefig(outPath)
-    #plt.show()
+    #plt.savefig(outPath)
+    plt.show()
     plt.clf()
 
     return
