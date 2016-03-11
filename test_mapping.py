@@ -14,8 +14,11 @@ import os
 
 def mapping(states, targetCounties, checkPoints, clientName):
 
-    shapePathRoot = 'C:\\Users\\dwright\\code\\geo_shapes\\'
-    countyShapeName = 'cb_2014_us_county_500k'
+    #shapePathRoot = 'C:\\Users\\dwright\\code\\geo_shapes\\'
+    shapePathRoot = 'C:\\Python27\\Lib\\site-packages\\mpl_toolkits\\basemap\\data\\'
+
+    #countyShapeName = 'cb_2014_us_county_500k'
+    countyShapeName = 'UScounties'
 
 
     shapePathCounty = manageShapeFile(shapePathRoot, countyShapeName)
@@ -23,10 +26,9 @@ def mapping(states, targetCounties, checkPoints, clientName):
 
     #testShape = shapefile.Reader(shapePathCounty)
 
-    stateShapeName = 'cb_2014_us_state_500k'
-    shapePathState = manageShapeFile(shapePathRoot, stateShapeName)
-    stateShape = shapefile.Reader(shapePathState)
-
+    #stateShapeName = 'cb_2014_us_state_500k'
+    #shapePathState = manageShapeFile(shapePathRoot, stateShapeName)
+    #stateShape = shapefile.Reader(shapePathState)
     #tp = testShape.shapeType
     #if tp not in [0, 1, 3, 5, 8]:
     #    shapepath = convertShapefile(shapePathCounty)
@@ -81,15 +83,27 @@ def mapping(states, targetCounties, checkPoints, clientName):
         #print 'name', info['NAME']
         #sys.exit()
         patches = []
+
         #print info['NAME'] + '_' + stateLookup[info['STATEFP']]
         if stateLookup[info['STATEFP']] + '_' + info['NAME'] in targetCounties.keys():
             col = targetCounties[stateLookup[info['STATEFP']] + '_' + info['NAME']][0]
             origValue = targetCounties[stateLookup[info['STATEFP']] + '_' + info['NAME']][1]
-            patches.append(Polygon(np.array(shape), True))
-            ax1.add_collection(PatchCollection(patches, facecolor=col, edgecolor='black',
-                                              linewidths=1., zorder=2, alpha=0.5))
 
-    map.readshapefile(shapePathState, 'states', drawbounds=True, linewidth=1)
+
+            patches.append(Polygon(np.array(shape), closed=False, label=stateLookup[info['STATEFP']]))
+            ax1.add_collection(PatchCollection(patches, facecolor=col, edgecolor='black',
+                                               linewidths=1., zorder=2, alpha=0.1))
+
+    print states
+    #map.readshapefile(shapePathState, 'states')#, drawbounds=True, linewidth=1)
+    #for info, shape in zip(map.states_info, map.states):
+    #    print info['NAME']
+    #    if info['NAME'] == 'Florida':
+
+            #outAr = np.array(shape)
+            #np.savetxt('c:\\users\\dwright\\desktop\\' + info['NAME'] + 'testFile.csv',outAr, delimiter=',')
+            #sys.exit()
+
 
     cols = [checkPoints['bottom'][1], checkPoints['mid'][1], checkPoints['top'][1]]
     print cols
@@ -143,11 +157,13 @@ def manageShapeFile(shapePathRoot, shapeName):
         print 'no shape file', shapeName + '.shp'
         sys.exit()
     # test if we need to convert
-    elif convertedName not in shapeFileList:
+
+    testShape = shapefile.Reader(shapePathRoot + shapeName)
+    if testShape.shapeType not in [0, 1, 3, 5, 8]:
         shapePath = convertShapefile(shapePathRoot + shapeName)
     # no need to convert
     else:
-        shapePath = shapePathRoot + convertedName
+        shapePath = shapePathRoot + shapeName
 
     shapePath = shapePath.replace('.shp', '')
     return shapePath
@@ -247,9 +263,8 @@ def convertShapefile(read_path):
         #print 'points:', shpe
         #print 'new type:', newtp
 
-        #print 'record:', rec
-        # next line gives error, iteration over non-sequence
-        wrtr.poly(shapeType=newtp, parts=[shpe])
+
+        wrtr.poly(shapeType=newtp, parts=[``])
         wrtr.record(rec[0], rec[1], rec[2], rec[3], rec[4], rec[5], rec[6], rec[7], rec[8])
 
     wrtr.save(write_path)
