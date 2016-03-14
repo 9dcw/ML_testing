@@ -14,11 +14,11 @@ import os
 
 def mapping(states, targetCounties, checkPoints, clientName):
 
-    #shapePathRoot = 'C:\\Users\\dwright\\code\\geo_shapes\\'
-    shapePathRoot = 'C:\\Python27\\Lib\\site-packages\\mpl_toolkits\\basemap\\data\\'
+    shapePathRoot = 'C:\\Users\\dwright\\code\\geo_shapes\\'
+    #shapePathRoot = 'C:\\Python27\\Lib\\site-packages\\mpl_toolkits\\basemap\\data\\'
 
-    #countyShapeName = 'cb_2014_us_county_500k'
-    countyShapeName = 'UScounties'
+    countyShapeName = 'cb_2014_us_county_500k'
+    #countyShapeName = 'UScounties'
 
 
     shapePathCounty = manageShapeFile(shapePathRoot, countyShapeName)
@@ -259,12 +259,19 @@ def convertShapefile(read_path):
         if i % 10 == 0:
             print i - len(shapeRecs)
         shpe = shapeShapes[i].points
+        #shpts = shapeShapes[i].parts
         rec = shapeRecs[i]
         #print 'points:', shpe
+        #print 'parts:', shpts
+
+
         #print 'new type:', newtp
+        # we need to pass the shape points as parts with a [] around it because
+        # it is expected another nested list
+        # in the future we can detect separate shapes like cities within a county
+        # and pass them as separate parts in a single shape...
 
-
-        wrtr.poly(shapeType=newtp, parts=[``])
+        wrtr.poly(shapeType=newtp, parts=[shpe])
         wrtr.record(rec[0], rec[1], rec[2], rec[3], rec[4], rec[5], rec[6], rec[7], rec[8])
 
     wrtr.save(write_path)
@@ -342,7 +349,7 @@ def main():
     topPercentile = 1
     p = 'c:\\users\\dwright\\dropbox\\'
     #p = '\\\\BA-FS-NY\Data\\Yr 2016\\Orchid\\Spinnaker Project\\Cat Modeling\\'
-
+    #p = '/'.join(os.path.abspath(__file__).replace('\\','/').split('/')[:-1]) + '/'
 
     #for clientName in ['Orchid','Reference']:
     for clientName in ['Loudoun', 'GUA']:
