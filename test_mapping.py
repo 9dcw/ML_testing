@@ -187,7 +187,11 @@ def manageShapeFile(shapePathRoot, shapeName):
     testShape = shapefile.Reader(shapePathRoot + shapeName)
     print testShape.shapeType, 'valid type?', testShape.shapeType in [0, 1, 3, 5, 8]
     if testShape.shapeType not in [0, 1, 3, 5, 8]:
-        shapePath = convertShapefile(shapePathRoot + shapeName)
+        testShape2 = shapefile.Reader(shapePathRoot + convertedName)
+        if testShape2.shapeType not in [0, 1, 3, 5, 8]:
+            shapePath = convertShapefile(shapePathRoot + shapeName)
+        else:
+            shapePath = shapePathRoot + convertedName
     # no need to convert
     else:
         shapePath = shapePathRoot + shapeName

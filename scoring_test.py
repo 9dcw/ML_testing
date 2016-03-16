@@ -20,7 +20,7 @@ def main():
 
     path = 'c:\\users\\dwright\\code\\'
     filename = path + 'scorebase.csv'
-    readRows = 1000
+    readRows = 20000
 
     rnd = np.random.rand(readRows, 1) ** 3
     biny = np.round(rnd, 0) # binary y
@@ -64,10 +64,21 @@ def main():
         r2 = r2_score(y_test, y_pred)
         print 'inear score:', r2_lin, 'boost score:', r2
 
-    randforest = RandomForestRegressor()
+    X_train, X_test, y_train, y_test = train_test_split(train_data, y)
+
 
     # let's fit a random forest!
-    randforest.fit(X_train, y)
+    depths = [i * 2 for i in range(1,5)]
+    r2s = []
+    for depth in depths:
+        print 'fitting depth', depth
+        randforest = RandomForestRegressor(max_depth=depth)
+        randforest.fit(X_train, y_train)
+        y_predict = randforest.predict(X_test)
+        #plt.scatter(y_predict, y_test)
+        r2s.append(r2_score(y_test, y_predict))
+    plt.scatter(r2s, depths)
+    plt.show()
     # ok now what??!?!?
 
     # would be useful to find the most important variables and plot those against loss cost
