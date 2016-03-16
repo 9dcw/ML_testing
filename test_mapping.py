@@ -11,10 +11,11 @@ import csv
 import pandas as pd
 import matplotlib as mpl
 import os
+import itertools
 
-def mapping(states, targetCounties, checkPoints, clientName):
+def mapping(states, targetCounties, checkPoints, clientName, outPath, shapePathRoot):
 
-    shapePathRoot = 'C:\\Users\\dwright\\code\\geo_shapes\\'
+
     #shapePathRoot = 'C:\\Python27\\Lib\\site-packages\\mpl_toolkits\\basemap\\data\\'
 
     countyShapeName = 'cb_2014_us_county_500k'
@@ -22,8 +23,7 @@ def mapping(states, targetCounties, checkPoints, clientName):
 
 
     shapePathCounty = manageShapeFile(shapePathRoot, countyShapeName)
-    print shapePathCounty
-
+    #print shapePathCounty
     #testShape = shapefile.Reader(shapePathCounty)
 
     #stateShapeName = 'cb_2014_us_state_500k'
@@ -33,13 +33,15 @@ def mapping(states, targetCounties, checkPoints, clientName):
     #if tp not in [0, 1, 3, 5, 8]:
     #    shapepath = convertShapefile(shapePathCounty)
 
-    f = open('C:\\Users\\dwright\\code\\state_codes.csv','rb')
+    f = open('state_codes.csv','rb')
     rdr = csv.reader(f)
     rdr.next()
     stateLookup = {i[2].zfill(2):i[1] for i in rdr}
     codeLookup = {stateLookup[i]:i for i in stateLookup.keys()}
-
-    stateCodes = [codeLookup[i] for i in states]
+    exStates = ['AK','HI']
+    stateCodes = [codeLookup[i] for i in states if i not in exStates]
+    exCodes = [i for i in states if i  in exStates]
+    print 'getting boundaries and excluding', exCodes
     minLat, minLon, maxLat, maxLon = getBoundaries(shapePathCounty, targetCounties, stateCodes)
 
     fig = plt.figure()
@@ -61,10 +63,31 @@ def mapping(states, targetCounties, checkPoints, clientName):
     print 'coordinate boundaries', minLat, minLon, maxLat, maxLon
     centerLat = (minLat + maxLat) / 2
     centerLon = (minLon + maxLon) / 2
+    lats = [minLat, maxLat, centerLat]
+    lons = [minLon, maxLon, centerLon]
+    cords = list(itertools.chain.from_iterable([[(i,j) for i in lons] for j in lats]))
 
-    map = Basemap(llcrnrlon=minLon,llcrnrlat=minLat,urcrnrlon=maxLon,urcrnrlat=maxLat,
-                  projection='aeqd', lat_0=centerLat, lon_0=centerLon, resolution='l')
+    convCords = []
+    # convert the midpoint lat and min lon to coordiantes and make the x of that the lower corner
+
+    map = Basemap(llcrnrlon=minLon-2,llcrnrlat=minLat-2,urcrnrlon=maxLon,urcrnrlat=maxLat,
+                  projection='stere', resolution='l',lat_0=centerLat, lon_0=centerLon, lat_ts=minLat)
     # draw coastlines, country boundaries, fill continents.
+    for cord in cords:
+      convCords.append(map(cord[0],cord[1]))
+    convCordsAr = np.array(convCords)
+    #print convCordsAr
+    mins = np.amin(convCordsAr,axis=1)
+    maxes = np.amax(convCordsAr,axis=1)
+    xmin = mins[0]
+    xmax = maxes[0]
+    ymin = mins[1]
+    ymax = maxes[1]
+
+    map = Basemap(llcrnrlon=minLon-2,llcrnrlat=minLat-2,urcrnrlon=maxLon,urcrnrlat=maxLat,
+                  projection='stere', resolution='l',lat_0=centerLat, lon_0=centerLon, lat_ts=minLat,
+                  width=xmax-xmin, height=ymax-ymin)
+
     map.drawcoastlines(linewidth=0.25)
     map.drawcountries(linewidth=0.25)
     #map.fillcontinents(color=(.8,.8,.8), lake_color='aqua')
@@ -92,9 +115,12 @@ def mapping(states, targetCounties, checkPoints, clientName):
 
             patches.append(Polygon(np.array(shape), closed=False, label=stateLookup[info['STATEFP']]))
             ax1.add_collection(PatchCollection(patches, facecolor=col, edgecolor='black',
-                                               linewidths=1., zorder=2, alpha=0.1))
+                                               linewidths=1., zorder=2, alpha=0.5))
 
-    print states
+    #print states
+    #print ax1.collections
+    #cb = map.colorbar(mappable=ax1.collections[0],location='bottom')
+
     #map.readshapefile(shapePathState, 'states')#, drawbounds=True, linewidth=1)
     #for info, shape in zip(map.states_info, map.states):
     #    print info['NAME']
@@ -105,13 +131,13 @@ def mapping(states, targetCounties, checkPoints, clientName):
             #sys.exit()
 
 
-    cols = [checkPoints['bottom'][1], checkPoints['mid'][1], checkPoints['top'][1]]
-    print cols
+    #cols = [checkPoints['bottom'][1], checkPoints['mid'][1], checkPoints['top'][1]]
+    #print cols
 
-    cmap = mpl.colors.ListedColormap(cols)
-    cmap.set_over('1')
-    cmap.set_under('0')
-
+    #cmap = mpl.colors.ListedColormap(cols)
+    #cmap.set_over('1')
+    #cmap.set_under('0')
+    #cbar = map.colorbar(
     # length of boundary array needs to be one more than length of color list
     # and needs to be monotonically increasing
 
@@ -139,11 +165,11 @@ def mapping(states, targetCounties, checkPoints, clientName):
     title = 'Exposure Heatmap for {0}'.format(clientName)
     plt.title(title)
     outFileName = 'ExposureMap_{0}'.format(clientName)
-    outPath = 'c:\\users\\dwright\\dropbox\\{0}.jpg'.format(outFileName)
+    outPath = outPath + '{0}.jpg'.format(outFileName)
 
     plt.tight_layout()
-    #plt.savefig(outPath)
-    plt.show()
+    plt.savefig(outPath)
+    #plt.show()
     plt.clf()
 
     return
@@ -159,6 +185,7 @@ def manageShapeFile(shapePathRoot, shapeName):
     # test if we need to convert
 
     testShape = shapefile.Reader(shapePathRoot + shapeName)
+    print testShape.shapeType, 'valid type?', testShape.shapeType in [0, 1, 3, 5, 8]
     if testShape.shapeType not in [0, 1, 3, 5, 8]:
         shapePath = convertShapefile(shapePathRoot + shapeName)
     # no need to convert
@@ -178,7 +205,9 @@ def getShapeFile(state, county, path):
     return outPath
 
 def getBoundaries(read_path, counties, stateCodes):
-    print 'getting boundaries for:', stateCodes
+    stateCodes = [i for i in stateCodes if i not in ['AK','HI']]
+
+    print 'warning: we are restricting this to only negatives longitudes!'
     sf = shapefile.Reader(read_path)
     tp = sf.shapeType
     shapeRecs = sf.records()
@@ -190,6 +219,7 @@ def getBoundaries(read_path, counties, stateCodes):
     maxLon = 0
     maxLat = 0
     minLat = 0
+
     for i in shapeIndices:
         shpe = shapeShapes[i].points
         rec = shapeRecs[i]
@@ -198,31 +228,35 @@ def getBoundaries(read_path, counties, stateCodes):
 
         if rec[0] in stateCodes:
             #print shpeAr
+            # we are restricting this to negative longitudes
 
             thisLon, thisLat = np.amin(shpeAr, 0)
-            if minLon == 0 or minLon > thisLon:
-                minLon = thisLon
-            if minLat == 0 or minLat > thisLat:
-                minLat = thisLat
+            if thisLon < 0:
+              if minLon == 0 or minLon > thisLon:
+                  minLon = thisLon
+              if minLat == 0 or minLat > thisLat:
+                  minLat = thisLat
 
             thisLon, thisLat = np.amax(shpeAr, 0)
-            if maxLon == 0 or maxLon < thisLon:
-                maxLon = thisLon
-            if maxLat == 0 or maxLat < thisLat:
-                maxLat = thisLat
+            if thisLon < 0:
+              if maxLon == 0 or maxLon < thisLon:
+                  maxLon = thisLon
+              if maxLat == 0 or maxLat < thisLat:
+                  maxLat = thisLat
 
     return minLat - 1, minLon - 1, maxLat+ 1, maxLon+ 1
 
 def convertShapefile(read_path):
-    print 'converting shapefile'
+    print 'converting shapefile', read_path
+
     sf = shapefile.Reader(read_path)
     tp = sf.shapeType
-    print tp
+    #print tp
 
     shapeRecs = sf.records()
     shapeShapes = sf.shapes()
     shapeFields = sf.fields
-    print sf.fields
+    #print sf.fields
 
 
     #Value Shape Type
@@ -242,11 +276,11 @@ def convertShapefile(read_path):
     #31 MultiPatch
 
     to_2D_dict = {0: 0, 11: 1, 13: 3, 15: 5, 18: 8}
-    print tp, to_2D_dict[tp]
+    print 'old type:', tp, 'new type:', to_2D_dict[tp]
     newtp = to_2D_dict[tp]
     wrtr = shapefile.Writer(shapeType=newtp)
     write_path = read_path + '_converted'
-    print len(shapeRecs), len(shapeShapes)
+    #print len(shapeRecs), len(shapeShapes)
 
     shapeIndices = range(len(shapeRecs))
     # loop through the shapefiles and create a 2D version of the shapefile we want
@@ -256,24 +290,25 @@ def convertShapefile(read_path):
         # for each type of field, we need to pass them individually, not as a list.. ugh
         wrtr.field(f[0], f[1], f[2], f[3])
     for i in shapeIndices:
-        if i % 10 == 0:
-            print i - len(shapeRecs)
+        #if i % 10 == 0:
+        #    print i - len(shapeRecs)
         shpe = shapeShapes[i].points
-        #shpts = shapeShapes[i].parts
+        shpts = shapeShapes[i].parts
         rec = shapeRecs[i]
         #print 'points:', shpe
-        #print 'parts:', shpts
-
 
         #print 'new type:', newtp
+        if len(shpts) == 0:
+            pts = [shpe]
+        else:
+            pts = shpts
         # we need to pass the shape points as parts with a [] around it because
         # it is expected another nested list
         # in the future we can detect separate shapes like cities within a county
         # and pass them as separate parts in a single shape...
-
-        wrtr.poly(shapeType=newtp, parts=[shpe])
+        wrtr.poly(shapeType=newtp, parts=pts)
         wrtr.record(rec[0], rec[1], rec[2], rec[3], rec[4], rec[5], rec[6], rec[7], rec[8])
-
+    print 'writing to', write_path
     wrtr.save(write_path)
 
     return write_path
@@ -347,19 +382,33 @@ def main():
     bottomPercentile = 0
     midPoint = 0.5
     topPercentile = 1
-    p = 'c:\\users\\dwright\\dropbox\\'
+    p = '\\'.join(os.path.abspath(__file__).replace('\\','/').split('/')[:-1]) + '\\'
+    #shapePathRoot = 'C:\\Users\\dwright\\code\\geo_shapes\\'
+    shapePathRoot = p + 'geo_shapes\\'
+    #p = 'c:\\users\\dwright\\dropbox\\'
     #p = '\\\\BA-FS-NY\Data\\Yr 2016\\Orchid\\Spinnaker Project\\Cat Modeling\\'
-    #p = '/'.join(os.path.abspath(__file__).replace('\\','/').split('/')[:-1]) + '/'
+    outPath = p + 'output_files\\'
+    p = p + 'data_files\\'
+    preTxt = ''
+    for i in os.listdir(p):
+      preTxt = preTxt + i.replace('Exposure.csv','') + '\n'
 
-    #for clientName in ['Orchid','Reference']:
-    for clientName in ['Loudoun', 'GUA']:
+    clientList = ['ClearBlueCoast', 'ClearBlueNonCoast']
+    clist = ' '.join(clientList)
+
+    inptTxt = '\nThe following datasets are available:\n' + preTxt + "\nType in names of datasets from list above separated by space and hit 'enter'.\nIf blank we will use: {0}\n\n".format(clist)
+    inpt = raw_input(inptTxt)
+    if inpt != '':
+        clientList = inpt.split(' ')
+    print 'running', clientList
+    for clientName in clientList:
 
         fname = '{0}Exposure.csv'.format(clientName)
 
         print 'getting data for', clientName
         targetStates, targetCounties, checkPoints = getData(fname, bottomPercentile, midPoint, topPercentile, p)
         print 'mapping', clientName
-        mapping(targetStates, targetCounties, checkPoints, clientName)
+        mapping(targetStates, targetCounties, checkPoints, clientName, outPath, shapePathRoot)
 
 if __name__ == '__main__':
     main()
