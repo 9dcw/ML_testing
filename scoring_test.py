@@ -39,44 +39,52 @@ def main():
     train_data = raw_train_data.loc[:, featureNames]
 
     kf = KFold(train_data.shape[0], n_folds=2)
-    train_data = preprocess(train_data)
+    train_data = preprocess(train_data,bin=False)
 
     print train_data.shape
 
-    for trainI, testI in kf:
+    #for trainI, testI in kf:
+        #X_train = train_data.ix[trainI, :]
+        #X_test = train_data.ix[testI, :]
+        #print 'train shape:', X_train.shape
+        #print 'test shape:', X_test.shape
 
-        X_train = train_data.ix[trainI, :]
-        X_test = train_data.ix[testI, :]
-        print 'train shape:', X_train.shape
-        print 'test shape:', X_test.shape
+        #y_train = y[trainI]
+        #y_test = y[testI]
 
-        y_train = y[trainI]
-        y_test = y[testI]
+        #lin = LinearRegression()
+        #lin.fit(X_train, y_train)
 
-        lin = LinearRegression()
-        lin.fit(X_train, y_train)
-
-        y_pred = lin.predict(X_test)
-        r2_lin = r2_score(y_test, y_pred)
-        clf = GradientBoostingRegressor()
-        clf.fit(X_train, y_train)
-        y_pred = clf.predict(X_test)
-        r2 = r2_score(y_test, y_pred)
-        print 'inear score:', r2_lin, 'boost score:', r2
+        #y_pred = lin.predict(X_test)
+        #r2_lin = r2_score(y_test, y_pred)
+        #clf = GradientBoostingRegressor()
+        #clf.fit(X_train, y_train)
+        #y_pred = clf.predict(X_test)
+        #r2 = r2_score(y_test, y_pred)
+        #print 'inear score:', r2_lin, 'boost score:', r2
 
     X_train, X_test, y_train, y_test = train_test_split(train_data, y)
-
 
     # let's fit a random forest!
     depths = [i * 2 for i in range(1,5)]
     r2s = []
+    importances = []
     for depth in depths:
         print 'fitting depth', depth
         randforest = RandomForestRegressor(max_depth=depth)
         randforest.fit(X_train, y_train)
+        imp = randforest.feature_importances_
+        print imp
+        plt.plot(range(X_train.shape[1]), imp)
+        #plt.set_xlabel(X_train.columns)
+        plt.show()
+        sys.exit()
+        importances.append(imp)
+
         y_predict = randforest.predict(X_test)
         #plt.scatter(y_predict, y_test)
         r2s.append(r2_score(y_test, y_predict))
+
     plt.scatter(r2s, depths)
     plt.show()
     # ok now what??!?!?
@@ -107,7 +115,7 @@ def main():
     # then the relative predictive power
 
 
-def preprocess(train_data):
+def preprocess(train_data, bin=False):
 
     typeCols = zip(train_data.dtypes, train_data.columns)
 
@@ -123,7 +131,8 @@ def preprocess(train_data):
             train_data.loc[train_data[colName] == '8B', colName] = '8'
 
             #print 'fixed', colName
-            train_data = binarize(train_data, colName)
+            if bin == True:
+                train_data = binarize(train_data, colName)
         if colName == 'NumberOfBathrooms':
 
             mn = train_data.loc[train_data[colName] != 'Unknown', colName].astype('float').mean()
@@ -136,7 +145,8 @@ def preprocess(train_data):
             train_data.loc[train_data[colName] == 'Superior - Non '
                                                   'Combustible or Fire Resistive',
                                                   colName] = 'Superior'
-            train_data = binarize(train_data, colName)
+            if bin == True:
+                train_data = binarize(train_data, colName)
         if colName == 'SupplementalHeatingSource':
 
             train_data.loc[train_data[colName] == 'Unknown', colName] = train_data[colName].mode().values[0]
@@ -151,7 +161,8 @@ def preprocess(train_data):
 
             #x = train_data[colName].unique()
 
-            train_data = binarize(train_data, colName)
+            if bin == True:
+                train_data = binarize(train_data, colName)
 
         if colName == 'WiringMaterial':
 
@@ -170,7 +181,8 @@ def preprocess(train_data):
             #print train_data[colName].value_counts()
 
             # all looks like romex and BX.. is that right?
-            train_data = binarize(train_data, colName)
+            if bin == True:
+                train_data = binarize(train_data, colName)
     return train_data
 
 
