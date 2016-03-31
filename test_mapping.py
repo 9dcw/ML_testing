@@ -10,28 +10,25 @@ import random
 import csv
 import pandas as pd
 import matplotlib as mpl
+import matplotlib.cm as cm
 import os
 import itertools
 
-def mapping(states, targetCounties, checkPoints, clientName, outPath, shapePathRoot):
 
+def mapping(states, targetCounties, minVal, maxVal, clientName, outPath, shapePathRoot):
 
-    #shapePathRoot = 'C:\\Python27\\Lib\\site-packages\\mpl_toolkits\\basemap\\data\\'
+    # shapePathRoot = 'C:\\Python27\\Lib\\site-packages\\mpl_toolkits\\basemap\\data\\'
 
     countyShapeName = 'cb_2014_us_county_500k'
-    #countyShapeName = 'UScounties'
-
+    # countyShapeName = 'UScounties'
 
     shapePathCounty = manageShapeFile(shapePathRoot, countyShapeName)
-    #print shapePathCounty
-    #testShape = shapefile.Reader(shapePathCounty)
+    # print shapePathCounty
+    # testShape = shapefile.Reader(shapePathCounty)
 
-    #stateShapeName = 'cb_2014_us_state_500k'
-    #shapePathState = manageShapeFile(shapePathRoot, stateShapeName)
-    #stateShape = shapefile.Reader(shapePathState)
-    #tp = testShape.shapeType
-    #if tp not in [0, 1, 3, 5, 8]:
-    #    shapepath = convertShapefile(shapePathCounty)
+    stateShapeName = 'cb_2014_us_state_500k'
+    shapePathState = manageShapeFile(shapePathRoot, stateShapeName)
+    stateShape = shapefile.Reader(shapePathState)
 
     f = open('state_codes.csv','rb')
     rdr = csv.reader(f)
@@ -47,18 +44,7 @@ def mapping(states, targetCounties, checkPoints, clientName, outPath, shapePathR
     fig = plt.figure()
     # axes: left, bottom, width, height
 
-    # building two subplots, one for the map and one for the colorbar
-    # this function sets how many 'rows and columns' are used
-    # so subplot2grid(100,1)uses 100 rows and 1 column
-    # the
-    ax1 = plt.subplot2grid((100, 1), (0, 0), rowspan=80)
-    #ax2 = plt.subplot2grid((100, 1), (89, 0))
-    #ax2.get_yaxis().set_visible(False)
-    #ax2.get_xaxis().set_visible(False)
-
-    #ax2 = fig.add_subplot(211)
-    #ax2 = fig.add_axes([.05, .05, .8, .2])
-    #ax1 = fig.add_axes([.05, .3, .9, .6])
+    ax1 = plt.subplot(111)
 
     print 'coordinate boundaries', minLat, minLon, maxLat, maxLon
     centerLat = (minLat + maxLat) / 2
@@ -98,8 +84,11 @@ def mapping(states, targetCounties, checkPoints, clientName, outPath, shapePathR
 
 
     map.readshapefile(shapePathCounty, 'counties', drawbounds=True)
-
+    norm = mpl.colors.Normalize(vmin=minVal, vmax=maxVal, clip=True)
+    cmap = cm.get_cmap(name='Greens')
+    colMaker = mpl.cm.ScalarMappable(norm=norm, cmap=cmap)
     # info are the fields
+    myCols = []
     for info, shape in zip(map.counties_info, map.counties):
         #print info
         #print shape
@@ -109,21 +98,24 @@ def mapping(states, targetCounties, checkPoints, clientName, outPath, shapePathR
 
         #print info['NAME'] + '_' + stateLookup[info['STATEFP']]
         if stateLookup[info['STATEFP']] + '_' + info['NAME'] in targetCounties.keys():
-            col = targetCounties[stateLookup[info['STATEFP']] + '_' + info['NAME']][0]
-            origValue = targetCounties[stateLookup[info['STATEFP']] + '_' + info['NAME']][1]
 
-
+            origValue = targetCounties[stateLookup[info['STATEFP']] + '_' + info['NAME']]
+            col = colMaker.to_rgba(origValue)
+            myCols.append(origValue)
             patches.append(Polygon(np.array(shape), closed=False, label=stateLookup[info['STATEFP']]))
-            ax1.add_collection(PatchCollection(patches, facecolor=col, edgecolor='black',
-                                               linewidths=1., zorder=2, alpha=0.5))
+            ptch = PatchCollection(patches, facecolor=col, edgecolor='black',
+                                               linewidths=1., zorder=2, alpha=0.5)
+            coll = ax1.add_collection(ptch)
 
-    #print states
-    #print ax1.collections
-    #cb = map.colorbar(mappable=ax1.collections[0],location='bottom')
+    myCols = np.array(myCols)
 
-    #map.readshapefile(shapePathState, 'states')#, drawbounds=True, linewidth=1)
+    coll.set_array(myCols)
+    cbar = map.colorbar(coll, location='bottom', pad='5%', cmap=cmap, norm=norm)
+    cbar.set_label('Values')
+
+    #map.readshapefile(shapePathState, 'states', drawbounds=True, linewidth=1.5)
     #for info, shape in zip(map.states_info, map.states):
-    #    print info['NAME']
+        #print info['NAME']
     #    if info['NAME'] == 'Florida':
 
             #outAr = np.array(shape)
@@ -131,30 +123,6 @@ def mapping(states, targetCounties, checkPoints, clientName, outPath, shapePathR
             #sys.exit()
 
 
-    #cols = [checkPoints['bottom'][1], checkPoints['mid'][1], checkPoints['top'][1]]
-    #print cols
-
-    #cmap = mpl.colors.ListedColormap(cols)
-    #cmap.set_over('1')
-    #cmap.set_under('0')
-    #cbar = map.colorbar(
-    # length of boundary array needs to be one more than length of color list
-    # and needs to be monotonically increasing
-
-    #bounds = [checkPoints['bottom'][0] -1,checkPoints['bottom'][0], checkPoints['mid'][0], checkPoints['top'][0]]
-    #print bounds
-    #norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
-    #cb = mpl.colorbar.ColorbarBase(ax, cmap=cmap, norm=norm#, boundaries=bounds
-    #                               , extend='both',
-                                # Make the length of each extension
-                                # the same as the length of the
-                                # interior colors:
-    #                            extendfrac='auto', ticks=bounds, spacing='uniform', orientation='horizontal')
-
-    #cb.set_label('Custom extension lengths, some other units')
-    # lon, lat =
-    #xpt, ypt = map(lon, lat)
-    #lonpt, latpt = map(xpt, ypt, inverse=True)
     # I can also find the center of the county and name it!
     # will need to figure out eh size of the name
 
@@ -183,19 +151,20 @@ def manageShapeFile(shapePathRoot, shapeName):
         print 'no shape file', shapeName + '.shp'
         sys.exit()
     # test if we need to convert
-
     testShape = shapefile.Reader(shapePathRoot + shapeName)
-    print testShape.shapeType, 'valid type?', testShape.shapeType in [0, 1, 3, 5, 8]
-    if testShape.shapeType not in [0, 1, 3, 5, 8]:
-        testShape2 = shapefile.Reader(shapePathRoot + convertedName)
-        if testShape2.shapeType not in [0, 1, 3, 5, 8]:
-            shapePath = convertShapefile(shapePathRoot + shapeName)
-        else:
-            shapePath = shapePathRoot + convertedName
-    # no need to convert
-    else:
+    # if correct shape, we ar good
+    if testShape.shapeType in [0, 1, 3, 5, 8]:
         shapePath = shapePathRoot + shapeName
-
+    # otherwise, check to see if we've converted this already
+    elif convertedName in shapeFileList:
+        testShape2 = shapefile.Reader(shapePathRoot + convertedName)
+        # if the converted is the right type
+        if testShape2.shapeType in [0, 1, 3, 5, 8]:
+            shapePath = shapePathRoot + convertedName
+    # so we need to convert
+    else:
+        shapePath = convertShapefile(shapePathRoot + shapeName)
+    # clean up the extensions
     shapePath = shapePath.replace('.shp', '')
     return shapePath
 
@@ -302,7 +271,7 @@ def convertShapefile(read_path):
         #print 'points:', shpe
 
         #print 'new type:', newtp
-        if len(shpts) == 0:
+        if shpts[0] == 0:
             pts = [shpe]
         else:
             pts = shpts
@@ -317,69 +286,29 @@ def convertShapefile(read_path):
 
     return write_path
 
-def getData(fname, bottomPercentile, midPoint, topPercentile, p):
+def getData(fname, bottomPercentile, topPercentile, p):
 
     baseData = pd.DataFrame.from_csv(p + fname, index_col=False)
+
     origValues = baseData.ix[:, 0]
     #print baseData
     #print baseData.ix[:,0]
     midPoint = 0.5
-    bottom = baseData.ix[:, 0].astype('float').quantile(bottomPercentile)
-    top = baseData.ix[:, 0].astype('float').quantile(topPercentile)
-    dataMid = baseData.ix[:, 0].astype('float').quantile(midPoint)
+    minVal = baseData.ix[:, 0].astype('float').quantile(bottomPercentile)
+    maxVal = baseData.ix[:, 0].astype('float').quantile(topPercentile)
 
-    dataRange = top - bottom
-
-    # cap the data at the top
-    baseData.ix[baseData.ix[:,0] > top, 0] = top
-    # subtract the bottom
-    baseData.ix[:,0] = baseData.ix[:,0] - bottom
-    # minimize at 0
-    baseData.ix[baseData.ix[:,0] < 0, 0] = 0
-    baseData.ix[baseData.ix[:,0] > 1, 0] = baseData.ix[:,0] / (dataRange)
-
-    # these are the three colors we are using as the range
-    low = [255, 51, 51]
-    med = [255, 255, 102]
-    high = [102, 255, 102]
-    low = [i/float(255) for i in low]
-    med = [i/float(255) for i in med]
-    high = [i/float(255) for i in high]
-
-    locs = baseData.shape[0]
-    r = pd.DataFrame({'r': baseData.ix[:, 0]})
-    g = pd.DataFrame({'g': baseData.ix[:, 0]})
-    b = pd.DataFrame({'b': baseData.ix[:, 0]})
-
-    #here I am working on doing this with matrices
-    lowAr = np.tile(np.array(low), (locs,1))
-    medAr = np.tile(np.array(med), (locs,1))
-    highAr = np.tile(np.array(high), (locs,1))
     targetCounties = dict()
+    locs = baseData.shape[0]
     for i in range(locs):
-        test = baseData.ix[i, 0]
-        # here we check against midPoint, which is 0.5 by default
-        if test < midPoint:
-            rs = ((med[0] - low[0]) * test / midPoint + low[0])
-            gs = ((med[1] - low[1]) * test / midPoint + low[1])
-            bs = ((med[2] - low[2]) * test / midPoint + low[2])
-        else:
-            rs = ((high[0] - med[0]) * (test - midPoint) / (1-midPoint) + med[0])
-            gs = ((high[1] - med[1]) * (test - midPoint) / (1-midPoint) + med[1])
-            bs = ((high[2] - med[2]) * (test - midPoint) / (1-midPoint) + med[2])
-        r.ix[i, 0] = rs
-        g.ix[i, 0] = gs
-        b.ix[i, 0] = bs
         stateName = str(baseData.ix[i, 1]).upper()
         countyName = str(baseData.ix[i, 2]).replace(' COUNTY', '').title()
-        targetCounties[stateName + '_' + countyName] = ((rs, gs, bs), origValues.ix[i, 0])
+        targetCounties[stateName + '_' + countyName] = origValues.ix[i, 0]
+        #print origValues.ix[i, 0]
 
     states = baseData.ix[:, 1].unique()
-    #add = pd.concat([r,g,b], axis=1)
-    #outData = pd.concat([baseData, add], axis=1)
 
-    checkPoints = {'bottom': (bottom, low), 'mid': (dataMid, med), 'top': (top, high)}
-    return states, targetCounties, checkPoints
+
+    return states, targetCounties, minVal, maxVal
 
 def main():
 
@@ -387,6 +316,9 @@ def main():
     midPoint = 0.5
     topPercentile = 1
     p = '\\'.join(os.path.abspath(__file__).replace('\\','/').split('/')[:-1]) + '\\'
+    p = '\\'.join(os.path.abspath(__file__).replace('\\','/').split('/')[:-2]) + '\\'
+    print p
+
     #shapePathRoot = 'C:\\Users\\dwright\\code\\geo_shapes\\'
     shapePathRoot = p + 'geo_shapes\\'
     #p = 'c:\\users\\dwright\\dropbox\\'
@@ -397,7 +329,7 @@ def main():
     for i in os.listdir(p):
       preTxt = preTxt + i.replace('Exposure.csv','') + '\n'
 
-    clientList = ['ClearBlueCoast', 'ClearBlueNonCoast']
+    clientList = [i.replace('Exposure.csv','') for i in os.listdir(p) if '.csv' in i]
     clist = ' '.join(clientList)
 
     inptTxt = '\nThe following datasets are available:\n' + preTxt + "\nType in names of datasets from list above separated by space and hit 'enter'.\nIf blank we will use: {0}\n\n".format(clist)
@@ -410,9 +342,9 @@ def main():
         fname = '{0}Exposure.csv'.format(clientName)
 
         print 'getting data for', clientName
-        targetStates, targetCounties, checkPoints = getData(fname, bottomPercentile, midPoint, topPercentile, p)
+        targetStates, targetCounties, minVal, maxVal = getData(fname, bottomPercentile, topPercentile, p)
         print 'mapping', clientName
-        mapping(targetStates, targetCounties, checkPoints, clientName, outPath, shapePathRoot)
+        mapping(targetStates, targetCounties, minVal, maxVal, clientName, outPath, shapePathRoot)
 
 if __name__ == '__main__':
     main()
