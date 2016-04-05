@@ -84,8 +84,8 @@ def mapping(states, targetCounties, minVal, maxVal, clientName, outPath, shapePa
 
 
     map.readshapefile(shapePathCounty, 'counties', drawbounds=True)
-    norm = mpl.colors.Normalize(vmin=minVal, vmax=maxVal, clip=True)
-    cmap = cm.get_cmap(name='Greens')
+    norm = mpl.colors.Normalize(vmin=minVal, vmax=maxVal, clip=False)
+    cmap = cm.get_cmap(name='Reds')
     colMaker = mpl.cm.ScalarMappable(norm=norm, cmap=cmap)
     # info are the fields
     myCols = []
@@ -96,23 +96,33 @@ def mapping(states, targetCounties, minVal, maxVal, clientName, outPath, shapePa
         #sys.exit()
         patches = []
 
+
+        # start here
+        parts = shape.parts
         #print info['NAME'] + '_' + stateLookup[info['STATEFP']]
         if stateLookup[info['STATEFP']] + '_' + info['NAME'] in targetCounties.keys():
 
             origValue = targetCounties[stateLookup[info['STATEFP']] + '_' + info['NAME']]
+
             col = colMaker.to_rgba(origValue)
+            print origValue, col, maxVal, minVal, info['NAME']
+
+
+            # looks like I need to loop through the different parts to add a patch for each
+
+
             myCols.append(origValue)
-            patches.append(Polygon(np.array(shape), closed=False, label=stateLookup[info['STATEFP']]))
+            patches.append(Polygon(np.array(shape), closed=True, label=stateLookup[info['STATEFP']]))
             ptch = PatchCollection(patches, facecolor=col, edgecolor='black',
-                                               linewidths=1., zorder=2, alpha=0.5)
+                                               linewidths=1., alpha=0.7)
             coll = ax1.add_collection(ptch)
 
     myCols = np.array(myCols)
 
     coll.set_array(myCols)
-    cbar = map.colorbar(coll, location='bottom', pad='5%', cmap=cmap, norm=norm)
-    cbar.set_label('Values')
-
+    cbar = map.colorbar(coll, location='top', pad='5%', cmap='Reds')
+    cbar.set_label('Location Value')
+    sys.exit()
     #map.readshapefile(shapePathState, 'states', drawbounds=True, linewidth=1.5)
     #for info, shape in zip(map.states_info, map.states):
         #print info['NAME']
