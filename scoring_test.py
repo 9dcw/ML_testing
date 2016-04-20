@@ -1,69 +1,152 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-#from sklearn.cross_validation import train_test_split
 from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.ensemble import RandomForestRegressor
-#from sklearn.ensemble.partial_dependence import plot_partial_dependence
-#from sklearn.linear_model import Lasso
+from sklearn.ensemble.partial_dependence import partial_dependence
+from sklearn.ensemble.partial_dependence import plot_partial_dependence
 from sklearn.linear_model import ElasticNet
 from sklearn.linear_model import LinearRegression, TheilSenRegressor
 from sklearn.cross_validation import KFold
 from sklearn.cross_validation import train_test_split
 from sklearn.metrics import r2_score
-
-#from sklearn.ensemble.partial_dependence import partial_dependence
+from mpl_toolkits.mplot3d import Axes3D
 import sys
 from sklearn import preprocessing
 
 def main():
 
-    path = 'c:\\users\\dwright\\code\\'
-    filename = path + 'scorebase.csv'
-    readRows = 20000
-
-    rnd = np.random.rand(readRows, 1) ** 3
-    biny = np.round(rnd, 0) # binary y
-    y = biny * np.random.lognormal(10, 2, (readRows, 1))
-    y = y.flatten().astype('int')
+    path = 'c:\\users\\dwright\\code\\NBIC_glamming\\'
+    filename = path + 'GLM_Variable_Inputs_Historical_distr.txt'
+    readRows = 1000
 
     raw_train_data = pd.read_csv(filename, nrows=readRows)
 
-    featureNames = ['protection_class', 'numberoffamilies', 'yearbuilt',
-                    'numberofbathrooms', 'construction', 'supplementalheatingsource',
-                    'pool', 'wiringmaterial']
+    featureNames = ['pol_tenure', 'insrd_insuredage', 'prop_protectionclass', 'geo_dtc',
+                    'Prop_SqFt', 'Prop_NumberOfFamilies', 'Prop_SqFt', 'Prop_DwellingAge']
 
-    featureNames = [i for i in raw_train_data.columns if i.lower() in featureNames]
+    featureNames = [i[0] for i in zip(raw_train_data.columns, raw_train_data.dtypes)
+                    if (i[0].lower() in featureNames or i[0] in featureNames)]# and i[1] != 'O']
+
     print 'feature names', featureNames
     print 'raw data shape', raw_train_data.shape[0]
+
     train_data = raw_train_data.loc[:, featureNames]
 
+    Xweights = raw_train_data.loc[:, 'Exposure']
+    claimsCounts = raw_train_data.loc[:, 'Claim_Count']
+    claimsAmounts = raw_train_data.loc[:, 'Claim_Loss_Incurred']
+    ALAEAmounts = raw_train_data.loc[:, 'Claim_ALAE_Incurred']
+
     kf = KFold(train_data.shape[0], n_folds=2)
-    train_data = preprocess(train_data,bin=False)
+    train_data = preprocess(train_data, bin=True)
 
-    print train_data.shape
+    bins = {}
+    outPath = path + '\\OutputCharts'
+    Y = claimsAmounts
 
-    #for trainI, testI in kf:
-        #X_train = train_data.ix[trainI, :]
-        #X_test = train_data.ix[testI, :]
-        #print 'train shape:', X_train.shape
-        #print 'test shape:', X_test.shape
+    #clf = GradientBoostingRegressor(n_estimators=100, learning_rate=1.0,
+    #                                 max_depth=1, random_state=0)
 
-        #y_train = y[trainI]
-        #y_test = y[testI]
+    clf = GradientBoostingRegressor()
+    clf.fit(train_data, Y, sample_weight=Xweights)
 
-        #lin = LinearRegression()
-        #lin.fit(X_train, y_train)
 
-        #y_pred = lin.predict(X_test)
-        #r2_lin = r2_score(y_test, y_pred)
-        #clf = GradientBoostingRegressor()
-        #clf.fit(X_train, y_train)
-        #y_pred = clf.predict(X_test)
-        #r2 = r2_score(y_test, y_pred)
-        #print 'inear score:', r2_lin, 'boost score:', r2
+    fig, axs = plot_partial_dependence(clf, train_data, features=range(train_data.shape[1]), feature_names=featureNames,
+                                       n_jobs=3, grid_resolution=50)
+    plt.show()
+    sys.exit()
 
-    X_train, X_test, y_train, y_test = train_test_split(train_data, y)
+
+    for k in train_data.columns:
+        if 'binned' in k:
+            root = k.split('_')[0]
+            if root not in bins.keys():
+                # first bianry in this list
+                bins[root] = [k]
+            else:
+                # adding to binary group
+                bins[root] = bins[root].append(k)
+        else: # not so run binary and this one
+            plotLinearScats(k, train_data, Y, Xweights, outPath)
+
+    for bin in bins.keys():
+        # run the bins
+        plotLinearScats(bins[bin], train_data, Y, Xweights, outPath)
+
+
+    return
+
+def plotLinearScats(k, train_data, Y, Xweights, outPath):
+    lin = LinearRegression()
+    if len(list(k)[0]) == 1: # this is not a list
+        trainer = train_data.loc[:, k].reshape(-1,1)
+        lin.fit(trainer, Y, sample_weight=Xweights)
+        plt.scatter(trainer, Y, color='black')
+        plt.plot(trainer, lin.predict(trainer), color='blue')
+    else:
+        pass
+    print lin.coef_
+    t = k + '\ncoefficient: ' + str(lin.coef_[0])
+    plt.title(t)
+    plt.savefig(outPath + '\\' + k + '_LinearRegression')
+
+    return
+
+
+def backup():
+
+    for ftr in featureNames:
+        print ftr, train_data.loc[:, ftr].describe()
+
+    #clf = GradientBoostingRegressor(n_estimators=100, learning_rate=1.0,
+    #                                 max_depth=1, random_state=0)
+
+    clf = RandomForestRegressor()
+    clf.fit(train_data, claimsCounts, sample_weight=Xweights)
+
+    # I want to show partial dependence in two ways: linear relationship and partial dependence
+
+    # partial dependence:
+    # For each value of the target features in the grid the partial dependence function need to marginalize
+    # the predictions of a tree over all possible values of the complement features.
+    # In decision trees this function can be evaluated efficiently without reference to the training data.
+    # For each grid point a weighted tree traversal is performed:
+    # if a split node involves a target feature, the corresponding left or right branch is followed,
+    # otherwise both branches are followed, each branch is weighted by the
+    # fraction of training samples that entered that branch.
+    # Finally, the partial dependence is given by a weighted average of all visited leaves.
+    # For tree ensembles the results of each individual tree are again averaged.
+
+    print featureNames
+    fig, axs = plot_partial_dependence(clf, train_data, features=range(train_data.shape[1]), feature_names=featureNames,
+                                       n_jobs=3, grid_resolution=50)
+
+    plt.title('Dependence of Variable on Claims Frequency')
+    plt.savefig(path + 'partial_dependence.png')
+
+    plt.clf()
+
+    pdp, (x_axis, y_axis) = partial_dependence(clf, (0,1), X=train_data)
+
+    XX, YY = np.meshgrid(x_axis, y_axis)
+
+    Z = pdp.T.reshape(XX.shape)
+    print XX.shape, YY.shape, Z.shape
+    ax = Axes3D(fig)
+    surf = ax.plot_surface(XX, YY, Z, rstride=1, cstride=1, cmap=plt.cm.BuPu)
+    plt.colorbar(surf)
+    plt.subplots_adjust(top=0.9)
+    plt.show()
+
+    pivot_train_data = pd.concat([train_data, raw_train_data.loc[:, ['Claim_Count', 'Exposure']]], axis=1)
+    print pivot_train_data
+
+    print pd.pivot_table(pivot_train_data, values=['Exposure', 'Claim_Count'],
+                         index='Prop_ProtectionClass', aggfunc=np.sum)
+
+
+    sys.exit()
+
 
     # let's fit a random forest!
     depths = [i * 2 for i in range(1,5)]
@@ -126,31 +209,32 @@ def preprocess(train_data, bin=False):
         # I'd like the min, max, mean, mode and median of each item
         print tp, colName #, train_data[colName][:10]
 
-        if colName == 'Protection_Class':
-            #print 'fixing', colName
-            train_data.loc[train_data[colName] == '8B', colName] = '8'
+        if 'protectionclass' in colName.lower():
+            print 'fixing', colName, tp
+            if tp == 'object':
+                train_data.loc[train_data.loc[:,colName] == '8B', colName] = '8'
+            train_data.loc[:, colName] = train_data.loc[:, colName].astype('int64')
+            train_data.loc[train_data.loc[:,colName] == 99, colName] = 10
+            train_data.loc[train_data.loc[:,colName] == 1, colName] = 2
+            print train_data[colName].unique()
+            print colName, train_data.loc[:, colName].value_counts()
 
-            #print 'fixed', colName
-            if bin == True:
-                train_data = binarize(train_data, colName)
         if colName == 'NumberOfBathrooms':
 
             mn = train_data.loc[train_data[colName] != 'Unknown', colName].astype('float').mean()
 
             train_data.loc[train_data[colName] == 'Unknown', colName] = mn
             train_data.loc[:, colName] = train_data[colName].astype('float')
-
+            pd.to_numeric(train_data.loc[:, colName])
         if colName.lower() == 'construction':
             train_data.loc[train_data[colName] == 'Framing, Wood', colName] = 'Frame'
             train_data.loc[train_data[colName] == 'Superior - Non '
                                                   'Combustible or Fire Resistive',
                                                   colName] = 'Superior'
-            if bin == True:
-                train_data = binarize(train_data, colName)
+
         if colName == 'SupplementalHeatingSource':
 
             train_data.loc[train_data[colName] == 'Unknown', colName] = train_data[colName].mode().values[0]
-            train_data = binarize(train_data, colName)
 
         if colName == 'Pool':
             m = train_data[colName].mode().values[0]
@@ -159,13 +243,22 @@ def preprocess(train_data, bin=False):
             train_data.loc[train_data[colName] == 'Unknown', colName] = m
             train_data.loc[train_data[colName] == '8', colName] = m
 
-            #x = train_data[colName].unique()
+        if colName.lower() == 'insrd_insuredage':
 
-            if bin == True:
-                train_data = binarize(train_data, colName)
+            #sys.exit()
+            train_data.loc[train_data.loc[:, colName] == 'Unknown', colName] = np.nan
+            m = train_data[colName].median()
+            #print 'fixing', colName, m
+            train_data.loc[:, colName].fillna(m)
+            pd.to_numeric(train_data.loc[:, colName])
+            tp = 'int64'
+
+        if colName == 'Prop_NumberOfFamilies':
+
+            print train_data.loc[:, colName].describe()
+            # it's failing here...
 
         if colName == 'WiringMaterial':
-
             train_data.loc[train_data[colName] == 'Unknown', colName] = train_data[colName].mode().values[0]
             c = 0
             # go through the list of materials
@@ -178,11 +271,10 @@ def preprocess(train_data, bin=False):
                     train_data.loc[train_data[colName] == forName, colName] = 'Other'
 
                 c += 1
-            #print train_data[colName].value_counts()
-
             # all looks like romex and BX.. is that right?
-            if bin == True:
-                train_data = binarize(train_data, colName)
+
+        if bin is True and tp == 'object':
+            train_data = binarize(train_data, colName)
     return train_data
 
 
@@ -197,8 +289,9 @@ def binarize(train_data, colName):
     train_enc = enc.transform(train_data[colName])
 
     # zip up and dict the column names, which will be 'old: col_value'
+    # col_value: colName_bin_#
     l = zip(range(1, len(enc.classes_)+1), enc.classes_)
-    renameDict = {i[0]: colName + '_' + str(i[1]) for i in l}
+    renameDict = {i[0]: colName + '_binned_' + str(i[1]) for i in l}
 
     # rename the new columns and build a dataframe
     train_enc = pd.DataFrame(train_enc).rename(columns=renameDict)
