@@ -4,14 +4,14 @@ import matplotlib.pyplot as plt
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.ensemble.partial_dependence import partial_dependence
 from sklearn.ensemble.partial_dependence import plot_partial_dependence
-from sklearn.linear_model import ElasticNet
-from sklearn.linear_model import LinearRegression, TheilSenRegressor
-from sklearn.cross_validation import KFold
-from sklearn.cross_validation import train_test_split
+from sklearn.linear_model import LinearRegression, TheilSenRegressor, ElasticNet
+from sklearn.neighbors.kde import KernelDensity
+from sklearn.cross_validation import train_test_split, KFold
 from sklearn.metrics import r2_score
 from mpl_toolkits.mplot3d import Axes3D
 import sys
 from sklearn import preprocessing
+import pylab as pl
 
 def main():
 
@@ -22,7 +22,8 @@ def main():
     raw_train_data = pd.read_csv(filename, nrows=readRows)
 
     featureNames = ['pol_tenure', 'insrd_insuredage', 'prop_protectionclass', 'geo_dtc',
-                    'Prop_SqFt', 'Prop_NumberOfFamilies', 'Prop_SqFt', 'Prop_DwellingAge']
+                    'Prop_SqFt', 'Prop_NumberOfFamilies', 'Prop_SqFt', 'Prop_DwellingAge',
+                    'Geo_State', 'Pol_NumberOfLosses']
 
     featureNames = [i[0] for i in zip(raw_train_data.columns, raw_train_data.dtypes)
                     if (i[0].lower() in featureNames or i[0] in featureNames)]# and i[1] != 'O']
@@ -40,37 +41,41 @@ def main():
     kf = KFold(train_data.shape[0], n_folds=2)
     train_data = preprocess(train_data, bin=True)
 
-    bins = {}
+
     outPath = path + '\\OutputCharts'
     Y = claimsAmounts
 
     #clf = GradientBoostingRegressor(n_estimators=100, learning_rate=1.0,
     #                                 max_depth=1, random_state=0)
 
-    clf = GradientBoostingRegressor()
-    clf.fit(train_data, Y, sample_weight=Xweights)
+    #clf = GradientBoostingRegressor()
+    #clf.fit(train_data, Y, sample_weight=Xweights)
 
 
-    fig, axs = plot_partial_dependence(clf, train_data, features=range(train_data.shape[1]), feature_names=featureNames,
-                                       n_jobs=3, grid_resolution=50)
-    plt.show()
-    sys.exit()
-
-
+    #fig, axs = plot_partial_dependence(clf, train_data, features=range(train_data.shape[1]), feature_names=train_data.columns,
+    #                                   n_jobs=3, grid_resolution=50)
+    plt.clf()
+    #sys.exit()
+    bins = {}
+    #print train_data.columns
     for k in train_data.columns:
+        #print k
         if 'binned' in k:
             root = k.split('_')[0]
+
             if root not in bins.keys():
                 # first bianry in this list
                 bins[root] = [k]
             else:
                 # adding to binary group
-                bins[root] = bins[root].append(k)
+                oldBin = bins[root]
+                newBin = oldBin + [k]
+                bins[root] = newBin
+
         else: # not so run binary and this one
             plotLinearScats(k, train_data, Y, Xweights, outPath)
 
     for bin in bins.keys():
-        # run the bins
         plotLinearScats(bins[bin], train_data, Y, Xweights, outPath)
 
 
@@ -78,17 +83,58 @@ def main():
 
 def plotLinearScats(k, train_data, Y, Xweights, outPath):
     lin = LinearRegression()
+    axes = pl.figure().add_subplot(111)
     if len(list(k)[0]) == 1: # this is not a list
-        trainer = train_data.loc[:, k].reshape(-1,1)
+        print k, 'single'
+        trainer = train_data.loc[:, k].astype('float').reshape(-1,1)
         lin.fit(trainer, Y, sample_weight=Xweights)
+        coef = lin.coef_[0]
         plt.scatter(trainer, Y, color='black')
-        plt.plot(trainer, lin.predict(trainer), color='blue')
+        prediction = lin.predict(trainer)
+        plt.plot(trainer, prediction, color='blue')
+        #axes.annotate('coefficient:' + str(coef), xy=(float(trainer[-1]), float(prediction[-1]))
+        #             ,xycoords='axes fraction',horizontalalignment='right', verticalalignment='right')
+        t = k + '\ncoefficient: ' + str(coef)
+        plt.title(t)
+        plt.savefig(outPath + '\\' + k + '_LinearRegression')
+        plt.clf()
+
+        plt.hist(x=trainer, weights=Xweights)
+        plt.title(s=k)
+        plt.savefig(outPath + '\\' + k + '_histogram')
+        plt.clf()
+        kde = KernelDensity(kernel='tophat').fit(trainer)
+        ht = kde.score_sampes(trainer)
+
+
     else:
-        pass
-    print lin.coef_
-    t = k + '\ncoefficient: ' + str(lin.coef_[0])
-    plt.title(t)
-    plt.savefig(outPath + '\\' + k + '_LinearRegression')
+        #print k, 'many'
+        # I want to plot the frequencies of the various components
+        #subjData = train_data.loc[:, k] * Xweights
+        countData = (Xweights*(train_data.loc[:, k]).T).T
+        claimsData = (Y*(train_data.loc[:, k]).T).T
+        X = np.sum(countData)
+        labels = [i.split('_')[-1] for i in k]
+
+        plt.bar(range(X.shape[0]), X.values)
+        name = '_'.join(k[0].split('_')[:2])
+        axes.set_xticklabels(labels, rotation=65)
+        plt.subplots_adjust(bottom=0.25)
+        plt.title(name)
+        plt.savefig(outPath + '\\' + name + '_HistogramMock')
+
+        plt.clf()
+
+        plt.scatter(countData, claimsData)
+        t = (name + ' Scatter')
+        plt.title(t)
+        plt.savefig(outPath + '\\' + name + '_scatter')
+        print 'saved', name
+
+        plt.clf()
+
+
+
 
     return
 
@@ -245,18 +291,16 @@ def preprocess(train_data, bin=False):
 
         if colName.lower() == 'insrd_insuredage':
 
-            #sys.exit()
             train_data.loc[train_data.loc[:, colName] == 'Unknown', colName] = np.nan
             m = train_data[colName].median()
             #print 'fixing', colName, m
-            train_data.loc[:, colName].fillna(m)
+            train_data.loc[:, colName] = train_data.loc[:, colName].fillna(m)
             pd.to_numeric(train_data.loc[:, colName])
             tp = 'int64'
 
         if colName == 'Prop_NumberOfFamilies':
 
             print train_data.loc[:, colName].describe()
-            # it's failing here...
 
         if colName == 'WiringMaterial':
             train_data.loc[train_data[colName] == 'Unknown', colName] = train_data[colName].mode().values[0]
@@ -274,7 +318,9 @@ def preprocess(train_data, bin=False):
             # all looks like romex and BX.. is that right?
 
         if bin is True and tp == 'object':
-            train_data = binarize(train_data, colName)
+            train_data, newCols = binarize(train_data, colName)
+
+
     return train_data
 
 
@@ -291,18 +337,25 @@ def binarize(train_data, colName):
     # zip up and dict the column names, which will be 'old: col_value'
     # col_value: colName_bin_#
     l = zip(range(1, len(enc.classes_)+1), enc.classes_)
+    #print l
+
     renameDict = {i[0]: colName + '_binned_' + str(i[1]) for i in l}
 
     # rename the new columns and build a dataframe
     train_enc = pd.DataFrame(train_enc).rename(columns=renameDict)
 
     # drop the old values
+    #print train_data.columns
     train_data = train_data.drop(colName, 1)
-
     # concatenate in the new columns
-    train_data = pd.concat((train_data, pd.DataFrame(train_enc)), 1)
-    print 'encoded', colName
-    return train_data
+    if train_enc.columns[0] != 0:
+        print train_enc.columns
+        sys.exit()
+    train_enc = pd.DataFrame(train_enc.iloc[:,1:])
+
+    train_data = pd.concat((train_data, train_enc), 1)
+    print 'encoded', colName, renameDict.values()
+    return train_data, renameDict.values()
 
 if __name__ == '__main__':
     main()
