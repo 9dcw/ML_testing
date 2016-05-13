@@ -19,7 +19,7 @@ def main():
     t0 = time.time()
     path = 'c:\\users\\dwright\\code\\NBIC_glamming\\'
     filename = path + 'GLM_Variable_Inputs_Historical_distr.txt'
-    readRows = 10000
+    readRows = None
 
     raw_train_data = pd.read_csv(filename, nrows=readRows)
 
@@ -37,7 +37,7 @@ def main():
         ,Geo_Territory
         ,Insrd_InsuredAge
         ,Pol_Tenure
-         ,Pol_AgentCategory
+        ,Pol_AgentCategory
         ,Pol_CovA
         ,Pol_AOPDeductible
         ,Pol_NumberOfLosses
@@ -83,8 +83,6 @@ def main():
     featureNames = [i.replace(' ','').replace('\n','') for i in featureText.split(',') if
                     'Geo_' in i or 'Prop_' in i or 'Cred_' in i or 'Insurd_' in i or 'Pol_' in i]
 
-    #featureNames = ['Geo_State', 'geo_dtc']
-
     featureNames = [i[0] for i in zip(raw_train_data.columns, raw_train_data.dtypes)
                     if (i[0].lower() in featureNames or i[0] in featureNames)]
 
@@ -119,38 +117,41 @@ def main():
 
             else: # not so run binary and this one
 
-                xlDict[Ytype + '_' + k + '_SR'] = plotSingleRegression(k, Xweights, train_data, Y, outPath, Ytype)
+                #xlDict[Ytype + '_' + k + '_SR'] = plotSingleRegression(k, Xweights, train_data, Y, outPath, Ytype)
                 xlDict[Ytype + '_' + k + '_Hist'] = plotSingleHist(k, Xweights, train_data, Y, outPath, Ytype)
 
         for bin in bins.keys():
             xlDict[Ytype + '_' + '_'.join(bins[bin][0].split('_')[:2]) + '_Hist'] = plotMultiHistogram(bins[bin], Xweights, train_data, Y, outPath, Ytype)
-    print len(xlDict)
-    print xlDict.keys()
+    #print len(xlDict)
+    #print xlDict.keys()
     FreqWriter = pd.ExcelWriter(outPath + '\\frequency.xlsx', engine='xlsxwriter')
     SevWriter = pd.ExcelWriter(outPath + '\\severity.xlsx', engine='xlsxwriter')
-    c = 0
+    counter = 0
     for out in xlDict:
-        c += 1
+        counter += 1
         if len(out) > 27:
-            sheetName = str(c) + '_' + out[:27]
+            sheetName = str(counter) + '_' + out[:27]
         else:
-            sheetName = str(c) + '_' + out
+            sheetName = str(counter) + '_' + out
 
-        if 'Claim_Count' in Ytype:
+        if 'Claim_Count' in out:
 
             xlDict[out].to_excel(FreqWriter, sheet_name=sheetName)
             wbook = FreqWriter.book
             wksht = FreqWriter.sheets[sheetName]
 
-        elif 'Claim_Loss_Incurred' in Ytype:
+        elif 'Claim_Loss_Incurred' in out:
 
             xlDict[out].to_excel(SevWriter, sheet_name=sheetName)
             wbook = SevWriter.book
             wksht = SevWriter.sheets[sheetName]
+        else:
+            print Ytype
+            sys.exit('what type is this?')
 
 
         r, c = xlDict[out].shape
-        wksht.write(r+5, 0, out)
+        wksht.write(0, c+5, out)
         if '_Hist' in out:
             # certain chart treatment for histograms
             column_chart = wbook.add_chart({'type': 'column'})
@@ -244,7 +245,8 @@ def plotMultiHistogram(k,Xweights, train_data,Y, outPath, Ytype):
     plt.subplots_adjust(bottom=0.25)
     plt.title(name)
     plt.savefig(outPath + '\\' + name + '_' + Ytype + '_Histogram')
-
+    plt.clf()
+    plt.close()
     outAr = np.vstack((xObs, yObs)).T
     outFrame = pd.DataFrame(outAr, index=xLabels, columns=['Observations', 'values'])
 
@@ -317,16 +319,7 @@ def preprocess(train_data, bin=False):
             train_data.loc[:, colName] = train_data.loc[:, colName].astype('int64')
             train_data.loc[train_data.loc[:,colName] == 99, colName] = 10
             train_data.loc[train_data.loc[:,colName] == 1, colName] = 2
-            #print train_data[colName].unique()
-            #print colName, train_data.loc[:, colName].value_counts()
 
-        #elif colName == 'NumberOfBathrooms':
-
-        #    mn = train_data.loc[train_data[colName] != 'Unknown', colName].astype('float').mean()
-
-         #   train_data.loc[train_data[colName] == 'Unknown', colName] = mn
-         #   train_data.loc[:, colName] = train_data[colName].astype('float')
-         #   pd.to_numeric(train_data.loc[:, colName])
         elif colName.lower() == 'construction':
             train_data.loc[train_data[colName] == 'Framing, Wood', colName] = 'Frame'
             train_data.loc[train_data[colName] == 'Superior - Non '
@@ -343,19 +336,6 @@ def preprocess(train_data, bin=False):
             train_data.fillna(m)
             train_data.loc[train_data[colName] == 'Unknown', colName] = m
             train_data.loc[train_data[colName] == '8', colName] = m
-
-        #elif colName.lower() == 'insrd_insuredage':
-
-        #    train_data.loc[train_data.loc[:, colName] == 'Unknown', colName] = np.nan
-        #    m = train_data[colName].median()
-        #    #print 'fixing', colName, m
-        #    train_data.loc[:, colName] = train_data.loc[:, colName].fillna(m)
-        #    pd.to_numeric(train_data.loc[:, colName])
-        #    tp = 'int64'
-
-        elif colName == 'Prop_NumberOfFamilies':
-            pass
-            #print train_data.loc[:, colName].describe()
 
         elif colName == 'WiringMaterial':
             train_data.loc[train_data[colName] == 'Unknown', colName] = train_data[colName].mode().values[0]
