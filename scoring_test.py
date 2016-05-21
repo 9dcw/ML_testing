@@ -92,15 +92,14 @@ def main():
     Xweights = raw_train_data.loc[:, 'Exposure']
 
     train_data = preprocess(train_data, bin=True)
-    yList = ['Claim_Count', 'Claim_Loss_Incurred']#, 'Claim_ALAE_Incurred']
+    yList = ['Claim_Loss_Incurred', 'Claim_Count']#, 'Claim_ALAE_Incurred']
     outPath = path + '\\OutputCharts'
-    print 'calculating correlation'
-
-    cmatrix = pd.DataFrame(train_data.corr())
-    print 'writing correlation matrix'
-    GenWriter = pd.ExcelWriter(outPath + '\\stats.xlsx', engine='xlsxwriter')
-    cmatrix.to_excel(GenWriter, sheet_name='Correlation_Matrix')
-    GenWriter.save()
+    #print 'calculating correlation'
+    #cmatrix = pd.DataFrame(train_data.corr())
+    #pr int 'writing correlation matrix'
+    #GenWriter = pd.ExcelWriter(outPath + '\\stats.xlsx', engine='xlsxwriter')
+    #cmatrix.to_excel(GenWriter, sheet_name='Correlation_Matrix')
+    #GenWriter.save()
     print 'calculating regression'
     lin = LinearRegression()
 
@@ -120,12 +119,17 @@ def main():
     xlDict = {}
 
     for Ytype in yList:
-        Y = raw_train_data.loc[:, Ytype]
+
         bins = {}
+
         if Ytype == 'Claim_Loss_Incurred':
-            X_train = train_data.loc[train_data[:, Ytype] > 0, :]
+            X_train = train_data[raw_train_data[Ytype] > 0]
+            Y = raw_train_data.loc[raw_train_data[Ytype] > 0, Ytype]
+            Xweights = Xweights[raw_train_data[Ytype] > 0]
         elif Ytype == 'Claim_Count':
             X_train = train_data
+            Y = raw_train_data[Ytype]
+            Xweights = raw_train_data.loc[:, 'Exposure']
         else:
             print Ytype
             sys.exit("freq or sev?")
@@ -158,8 +162,6 @@ def main():
     Fcounter = 0
     Scounter = 0
 
-    FlinkDict = {}
-    SlinkDict = {}
     for out in xlDict:
 
         if 'Claim_Count' in out:
@@ -216,13 +218,8 @@ def main():
         elif '_SR' in out:
             pass
             #different chart treatment for regressions
-
-
     SevWriter.save()
     FreqWriter.save()
-
-
-
     print (time.time() - t0) / 60
     return
 
@@ -299,7 +296,13 @@ def plotSingleHist(k,Xweights, train_data,Y, outPath, Ytype):
 
     trainerAr = np.array(train_data.loc[:, k].astype('float'))
 
-    plotData = pd.DataFrame(np.vstack((trainerAr, Xweights, Y)).T)
+    try:
+        plotData = pd.DataFrame(np.vstack((trainerAr, Xweights, Y)).T)
+    except ValueError as e:
+        print trainerAr.shape
+        print Xweights.shape
+        print Y.shape
+        raise
     plotData.columns = [k, 'weights', 'target']
     if np.unique(trainerAr).shape[0] > 10:
         # we'll need to bin the columns to build a histogram
@@ -356,6 +359,7 @@ def preprocess(train_data, bin=False):
         if tp == 'object':
             binSkip = False
         # these are numeric fields we are still going to binarize
+
         if colName in ['Pol_Tenure', 'Pol_AOPDeductible', 'Pol_NumberOfLosses']:
             binSkip = False
 
@@ -380,6 +384,22 @@ def preprocess(train_data, bin=False):
             train_data.loc[:, colName] = train_data.loc[:, colName].astype('int64')
             train_data.loc[train_data.loc[:,colName] == 99, colName] = 10
             train_data.loc[train_data.loc[:,colName] == 1, colName] = 2
+
+        elif colName == 'Pol_CovA':
+            print 'need to bin this manually'
+
+        elif colName == 'Cred_CreditScore':
+
+            pass
+        elif colName == 'Prop_RoofAge':
+            print 'binning manually'
+
+        elif colName == 'Prop_DwellingAge':
+            print 'binning manually'
+
+        elif colName == 'Prop_SqFt':
+            print 'binning manually'
+
 
         elif colName.lower() == 'construction':
             train_data.loc[train_data[colName] == 'Framing, Wood', colName] = 'Frame'
