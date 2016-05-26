@@ -14,7 +14,7 @@ def main():
     t0 = time.time()
     path = 'c:\\users\\dwright\\code\\NBIC_glamming\\'
     filename = path + 'GLM_Variable_Inputs_Historical_distr.txt'
-    readRows = None
+    readRows = 10000
 
     raw_train_data = pd.read_csv(filename, nrows=readRows)
 
@@ -84,24 +84,36 @@ def main():
     featureNames = [i[0] for i in zip(raw_train_data.columns, raw_train_data.dtypes)
                     if (i[0].lower() in featureNames or i[0] in featureNames)]
 
+    two_way_features = ['Prop_NumberOfBathrooms', 'Prop_SqFt', 'Prop_CovA', 'Cred_CreditScore']
+
     print 'feature names', featureNames
     print 'raw data shape', raw_train_data.shape[0]
-
+    outPath = path + '\\OutputCharts'
     train_data = raw_train_data.loc[:, featureNames]
 
+    testCount1 = raw_train_data['Claim_Count'] > 0
+    testCount2 = (raw_train_data['Claim_Loss_Incurred'] + raw_train_data['Claim_ALAE_Incurred']) > 0
+
+    # need to make sure that the claims count fields always nonzero when the claims amount fields are
+    assert testCount1.all() == testCount2.all()
+
+    #test_out = raw_train_data[['Geo_State', 'Exposure', 'Claim_Loss_Incurred', 'Claim_ALAE_Incurred', 'Claim_Count']]
+    #test_out.to_csv(outPath + '\\testout.csv')
+    #sys.exit()
     Xweights = raw_train_data.loc[:, 'Exposure']
 
     train_data = preprocess(train_data, bin=True)
     yList = ['Claim_Loss_Incurred', 'Claim_Count']#, 'Claim_ALAE_Incurred']
-    outPath = path + '\\OutputCharts'
-    #print 'calculating correlation'
+    raw_train_data[yList[0]] = raw_train_data[yList[0]] + raw_train_data['Claim_ALAE_Incurred']
+
+    print 'calculating correlation'
     #cmatrix = pd.DataFrame(train_data.corr())
-    #pr int 'writing correlation matrix'
+    print 'writing correlation matrix'
     #GenWriter = pd.ExcelWriter(outPath + '\\stats.xlsx', engine='xlsxwriter')
     #cmatrix.to_excel(GenWriter, sheet_name='Correlation_Matrix')
     #GenWriter.save()
-    print 'calculating regression'
-    lin = LinearRegression()
+    #print 'calculating regression'
+    #lin = LinearRegression()
 
     #for Ytype in yList:
     #    X_tr, X_ts, Y_tr, Y_ts = train_test_split(train_data, raw_train_data.loc[:, Ytype], test_size=.3)
@@ -117,19 +129,53 @@ def main():
     #    print 'score for ', Ytype, lin.score(X_ts, Y_ts)
 
     xlDict = {}
+    # need to run through the columns and collect features that correspond to these
+    # we already have a mapping of the column to an index
+
+    freqVector = raw_train_data[yList[1]]
+    secVector = raw_train_data[yList[0]]
+    print freqVector.value_counts()
+
+    for feat1 in two_way_features:
+        feat1Vector, feat1Labels = vectorize(train_data, feat1)
+        print feat1Vector.value_counts()
+        for feat2 in two_way_features:
+            feat2Vector, feat2Labels = vectorize(train_data, feat2)
+            print feat2Vector.value_counts()
+            fig, ax = plt.subplots()
+
+            ax.scatter(x=feat1Vector, y=feat2Vector, s=freqVector)
+            ax.set_xticklabels(feat1Labels)
+            ax.set_yticklabels(feat2Labels)
+            plt.show()
+            plt.clf()
+            plt.close()
+
+            fig, ax = plt.subplots()
+            ax.scatter(x=feat1Vector, y=feat2Vector, s=secVector)
+            ax.set_xticklabels(feat1Labels)
+            ax.set_yticklabels(feat2Labels)
+
+            plt.show()
+            plt.clf()
+            plt.close()
+
+
 
     for Ytype in yList:
 
         bins = {}
 
         if Ytype == 'Claim_Loss_Incurred':
+            Ycount = raw_train_data.loc[raw_train_data[Ytype] > 0, 'Claim_Count']
             X_train = train_data[raw_train_data[Ytype] > 0]
             Y = raw_train_data.loc[raw_train_data[Ytype] > 0, Ytype]
             Xweights = Xweights[raw_train_data[Ytype] > 0]
         elif Ytype == 'Claim_Count':
+            Ycount = raw_train_data['Claim_Count']
             X_train = train_data
-            Y = raw_train_data[Ytype]
-            Xweights = raw_train_data.loc[:, 'Exposure']
+            Y = Ycount
+            Xweights = raw_train_data['Exposure']
         else:
             print Ytype
             sys.exit("freq or sev?")
@@ -147,12 +193,12 @@ def main():
 
             else: # not so run binary and this one
 
-                #xlDict[Ytype + '_' + k + '_SR'] = plotSingleRegression(k, Xweights, train_data, Y, outPath, Ytype)
-                xlDict[Ytype + '_' + k + '_Hist'] = plotSingleHist(k, Xweights, X_train, Y, outPath, Ytype)
+                #xlDict[Ytype + '_' + k + '_SR'] = plotSingleRegression(k, Xweights, train_data, Y, outPath, Ytype, Ycount)
+                xlDict[Ytype + '_' + k + '_Hist'] = plotSingleHist(k, Xweights, X_train, Y, outPath, Ytype, Ycount)
 
         for bin in bins.keys():
             nm = Ytype + '_' + '_'.join(bins[bin][0].split('_')[:2]) + '_Hist'
-            xlDict[nm] = plotMultiHistogram(bins[bin], Xweights, X_train, Y, outPath, Ytype)
+            xlDict[nm] = plotMultiHistogram(bins[bin], Xweights, X_train, Y, outPath, Ytype, Ycount)
 
     FreqWriter = pd.ExcelWriter(outPath + '\\frequency.xlsx', engine='xlsxwriter')
     SevWriter = pd.ExcelWriter(outPath + '\\severity.xlsx', engine='xlsxwriter')
@@ -223,7 +269,7 @@ def main():
     print (time.time() - t0) / 60
     return
 
-def plotSingleRegression(k,Xweights, train_data,Y, outPath, Ytype):
+def plotSingleRegression(k,Xweights, train_data,Y, outPath, Ytype, Ycount):
     lin = LinearRegression()
     ax1 = pl.figure().add_subplot(111)
     print k, Ytype, 'numeric field'
@@ -253,7 +299,7 @@ def plotSingleRegression(k,Xweights, train_data,Y, outPath, Ytype):
     return out
 
 
-def plotMultiHistogram(k,Xweights, train_data,Y, outPath, Ytype):
+def plotMultiHistogram(k, Xweights, train_data, Y, outPath, Ytype, Ycount):
     fig, ax1 = plt.subplots()
     ax2 = ax1.twinx()
     w = 0.8 #width
@@ -264,11 +310,18 @@ def plotMultiHistogram(k,Xweights, train_data,Y, outPath, Ytype):
     xObsData = (Xweights*(train_data.loc[:, k]).T).T
     # remember that the train data is binary in each col
     # so this is returning the claims for those columns
-    claimsData = (Y*(train_data.loc[:, k]).T).T
-    xObs = np.sum(xObsData)
-    xLabels = [str(i.split('_')[-1]) for i in k]
-    yObs = np.sum(claimsData) / xObs
+    countData = (Ycount*(train_data.loc[:, k]).T).T
 
+    if Ytype == 'Claim_Count':
+        xObs = np.sum(xObsData)
+        yObs = np.sum(countData) / xObs
+    elif Ytype == 'Claim_Loss_Incurred':
+        xObs = np.sum(countData)
+        yObs = np.sum((Y*(train_data.loc[:, k]).T).T) / xObs
+    else:
+        print 'invalid Y type', Ytype
+        sys.exit()
+    xLabels = [str(i.split('_')[-1]) for i in k]
     ax1.bar(range(xObs.shape[0]), xObs.values, width=w)
 
     name = '_'.join(k[0].split('_')[:2])
@@ -292,26 +345,27 @@ def plotMultiHistogram(k,Xweights, train_data,Y, outPath, Ytype):
 
     return outFrame
 
-def plotSingleHist(k,Xweights, train_data,Y, outPath, Ytype):
+def plotSingleHist(k,Xweights, train_data,Y, outPath, Ytype, Ycount):
 
     trainerAr = np.array(train_data.loc[:, k].astype('float'))
 
     try:
-        plotData = pd.DataFrame(np.vstack((trainerAr, Xweights, Y)).T)
+        plotData = pd.DataFrame(np.vstack((trainerAr, Xweights, Y, Ycount)).T)
     except ValueError as e:
         print trainerAr.shape
         print Xweights.shape
         print Y.shape
+        print Ycount.shape
+
         raise
-    plotData.columns = [k, 'weights', 'target']
+    plotData.columns = [k, 'weights', 'target', 'counts']
     if np.unique(trainerAr).shape[0] > 10:
         # we'll need to bin the columns to build a histogram
         binCount = 10
-        #print binCount
         bins = np.linspace(trainerAr.min(), trainerAr.max(), binCount)
-        #print bins
-        plotSmry = plotData.groupby(pd.cut(plotData.loc[:, plotData.columns[0]], bins)).sum()
-        plotSmry.drop(plotSmry.columns[0], axis=1, inplace=True)
+        plotSmry = plotData.groupby(pd.cut(plotData[k], bins)).sum()
+        plotSmry.drop(k, axis=1, inplace=True)
+
         xLabels = [' to '.join(i.split(',')).replace('(','').replace(']','') for i in plotSmry.index]
     else:
         #there are few enough columns that we will just take them all in
@@ -321,8 +375,13 @@ def plotSingleHist(k,Xweights, train_data,Y, outPath, Ytype):
     ax2 = ax1.twinx()
     w = 0.8 #width
 
-    xObs = plotSmry.ix[:,0].values
-    yObs = plotSmry.ix[:,1].values / xObs
+    # 0th is the weights because we drop the actual value
+    if Ytype == 'Claim_Count':
+        xObs = plotSmry['weights'].values
+        yObs = plotSmry['target'].values
+    else:
+        xObs = plotSmry['counts'].values
+        yObs = plotSmry['target'].values / xObs
     ax1.bar(range(plotSmry.shape[0]), xObs,width=w)
     tspots = [w/2 + i for i in range(plotSmry.shape[0])]
     ax1.set_xticks(tspots)
@@ -376,7 +435,8 @@ def preprocess(train_data, bin=False):
             print train_data.loc[:, colName].unique()
             print item, train_data.loc[:, colName].unique().shape[0]
             sys.exit('new object')
-
+        print colName
+        #print train_data[colName].value_counts()
         if 'protectionclass' in colName.lower():
             print 'fixing', colName, tp
             if tp == 'object':
@@ -386,53 +446,42 @@ def preprocess(train_data, bin=False):
             train_data.loc[train_data.loc[:,colName] == 1, colName] = 2
 
         elif colName == 'Pol_CovA':
-            print 'need to bin this manually'
+            units = 100000
+            train_data[colName] = train_data[colName].map(lambda x: round(x / units + .99999,0) * units)
 
         elif colName == 'Cred_CreditScore':
+            units = 25
+            train_data[colName] = train_data[colName].fillna('Unknown')
+            train_data.loc[train_data[colName] != 'Unknown', colName] = \
+            train_data.loc[train_data[colName] != 'Unknown', colName].map(lambda x: str(round(int(x) / units + .99999,0) * units))
 
-            pass
         elif colName == 'Prop_RoofAge':
-            print 'binning manually'
+            units = 5
+            train_data[colName] = train_data[colName].fillna('Unknown')
+            train_data.loc[train_data[colName] != 'Unknown', colName] = \
+            train_data.loc[train_data[colName] != 'Unknown', colName].map(lambda x: str(round(int(x) / units + .99999,0) * units))
 
         elif colName == 'Prop_DwellingAge':
-            print 'binning manually'
+            units = 5
+
+            if tp == 'object':
+                train_data[colName] = train_data[colName].fillna('Unknown')
+                train_data.loc[train_data[colName] != 'Unknown', colName] = \
+                train_data.loc[train_data[colName] != 'Unknown', colName].map(lambda x: str(round(int(x) / units + .99999,0) * units))
+
+            else:
+                train_data[colName] = train_data[colName].map(lambda x: str(round(int(x) / units + .99999,0) * units))
 
         elif colName == 'Prop_SqFt':
-            print 'binning manually'
+            units = 100
+            if tp == 'object':
+                train_data[colName] = train_data[colName].fillna('Unknown')
+                train_data.loc[train_data[colName] != 'Unknown', colName] = \
+                train_data.loc[train_data[colName] != 'Unknown', colName].map(lambda x: str(round(int(x) / units + .99999,0) * units))
 
+            else:
+                train_data[colName] = train_data[colName].map(lambda x: str(round(int(x) / units + .99999,0) * units))
 
-        elif colName.lower() == 'construction':
-            train_data.loc[train_data[colName] == 'Framing, Wood', colName] = 'Frame'
-            train_data.loc[train_data[colName] == 'Superior - Non '
-                                                  'Combustible or Fire Resistive',
-                                                  colName] = 'Superior'
-
-        elif colName == 'SupplementalHeatingSource':
-
-            train_data.loc[train_data[colName] == 'Unknown', colName] = train_data[colName].mode().values[0]
-
-        elif colName == 'Pool':
-            m = train_data[colName].mode().values[0]
-            print train_data[colName].mode().value_counts()
-            sys.exit()
-            train_data.fillna(m)
-            train_data.loc[train_data[colName] == 'Unknown', colName] = np.nan
-            train_data.loc[train_data[colName] == '8', colName] = m
-
-        elif colName == 'WiringMaterial':
-            train_data.loc[train_data[colName] == 'Unknown', colName] = np.nan
-            c = 0
-            # go through the list of materials
-            for forName in train_data[colName].value_counts().index:
-                # these are the index names of the rows
-                ct = train_data[colName].value_counts()[forName]
-                # if a material with a small number of instances, make it 'other'
-                if ct < train_data.shape[0] * .05:
-                    #print ct, forName
-                    train_data.loc[train_data[colName] == forName, colName] = 'Other'
-
-                c += 1
-            # all looks like romex and BX.. is that right?
         else:
             if '%' in colName:
                 train_data.loc[train_data.loc[:, colName].notnull(), colName] = \
@@ -450,24 +499,20 @@ def preprocess(train_data, bin=False):
                 except ValueError as e:
                     pass
 
-
         # we are activating the binning process and we
         # havn't excepted this variable from it via binSkip
         print count
         count -= 1
         if bin is True and binSkip == False:
-            train_data.loc[:, colName] = train_data.loc[:, colName].fillna('Unknown')
+            train_data[colName] = train_data[colName].fillna('Unknown')
             print 'encoding', colName, tp, 'binskip?', binSkip
             train_data, newCols = binarize(train_data, colName)
         else:
             # replacing unknowns with the modal value
-            m = train_data.loc[:, colName].value_counts().index[0]
-            train_data.loc[:, colName] = train_data.loc[:, colName].fillna(m)
-
-
+            m = train_data[colName].value_counts().index[0]
+            train_data[colName] = train_data[colName].fillna(m)
 
     return train_data
-
 
 def binarize(train_data, colName):
     enc = preprocessing.LabelBinarizer()
@@ -502,6 +547,17 @@ def binarize(train_data, colName):
     train_data = pd.concat([train_data, train_enc], axis=1)
     print 'encoded', colName#, renameDict.values()
     return train_data, renameDict.values()
+
+def vectorize(train_data, feat1):
+    featList = [i for i in train_data.columns if feat1 in i]
+    featMatrix = train_data.loc[:, featList]
+    c = 0
+    for i in featList:
+        # this will change the value in the matrix to the index value of the column
+        featMatrix.loc[:, i] = featMatrix.loc[:, i] * c
+        c += 1
+    featVector = featMatrix.sum(axis=1)
+    return featVector, featList
 
 if __name__ == '__main__':
     main()
