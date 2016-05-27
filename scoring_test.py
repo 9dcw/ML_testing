@@ -14,7 +14,7 @@ def main():
     t0 = time.time()
     path = 'c:\\users\\dwright\\code\\NBIC_glamming\\'
     filename = path + 'GLM_Variable_Inputs_Historical_distr.txt'
-    readRows = 10000
+    readRows = None
 
     raw_train_data = pd.read_csv(filename, nrows=readRows)
 
@@ -107,11 +107,11 @@ def main():
     raw_train_data[yList[0]] = raw_train_data[yList[0]] + raw_train_data['Claim_ALAE_Incurred']
 
     print 'calculating correlation'
-    #cmatrix = pd.DataFrame(train_data.corr())
+    cmatrix = pd.DataFrame(train_data.corr())
     print 'writing correlation matrix'
-    #GenWriter = pd.ExcelWriter(outPath + '\\stats.xlsx', engine='xlsxwriter')
-    #cmatrix.to_excel(GenWriter, sheet_name='Correlation_Matrix')
-    #GenWriter.save()
+    GenWriter = pd.ExcelWriter(outPath + '\\stats.xlsx', engine='xlsxwriter')
+    cmatrix.to_excel(GenWriter, sheet_name='Correlation_Matrix')
+    GenWriter.save()
     #print 'calculating regression'
     #lin = LinearRegression()
 
@@ -134,38 +134,33 @@ def main():
 
     freqVector = raw_train_data[yList[1]]
     secVector = raw_train_data[yList[0]]
-    print freqVector.value_counts()
-
+    print 'freq\n', freqVector.value_counts()
     for feat1 in two_way_features:
         feat1Vector, feat1Labels = vectorize(train_data, feat1)
-        print feat1Vector.value_counts()
+        print 'feat1\n', feat1, feat1Vector.value_counts()
         for feat2 in two_way_features:
             feat2Vector, feat2Labels = vectorize(train_data, feat2)
-            print feat2Vector.value_counts()
-            fig, ax = plt.subplots()
+            print 'feat2\n', feat2, feat2Vector.value_counts()
+            #fig, ax = plt.subplots()
 
-            ax.scatter(x=feat1Vector, y=feat2Vector, s=freqVector)
-            ax.set_xticklabels(feat1Labels)
-            ax.set_yticklabels(feat2Labels)
-            plt.show()
-            plt.clf()
-            plt.close()
+            #ax.scatter(x=feat1Vector, y=feat2Vector, s=freqVector)
+            #ax.set_xticklabels(feat1Labels)
+            #ax.set_yticklabels(feat2Labels)
+            #plt.show()
+            #plt.clf()
+            #plt.close()
 
-            fig, ax = plt.subplots()
-            ax.scatter(x=feat1Vector, y=feat2Vector, s=secVector)
-            ax.set_xticklabels(feat1Labels)
-            ax.set_yticklabels(feat2Labels)
+            #fig, ax = plt.subplots()
+            #ax.scatter(x=feat1Vector, y=feat2Vector, s=secVector)
+            #ax.set_xticklabels(feat1Labels)
+            #ax.set_yticklabels(feat2Labels)
 
-            plt.show()
-            plt.clf()
-            plt.close()
-
-
+            #plt.show()
+            #plt.clf()
+            #plt.close()
 
     for Ytype in yList:
-
         bins = {}
-
         if Ytype == 'Claim_Loss_Incurred':
             Ycount = raw_train_data.loc[raw_train_data[Ytype] > 0, 'Claim_Count']
             X_train = train_data[raw_train_data[Ytype] > 0]
