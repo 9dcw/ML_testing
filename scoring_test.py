@@ -3,6 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression#, TheilSenRegressor, ElasticNet
 from sklearn.cross_validation import train_test_split
+from sklearn.cross_validation import KFold
+from sklearn.cross_validation import StratifiedKFold
 import sys
 from sklearn import preprocessing
 import pylab as pl
@@ -26,42 +28,41 @@ def main():
 
     return
 
-def model(X, Y, error='poisson', link='log', wts=np.array([0]), offset=np.array([0]),
-          names=np.array([0])):
-    if wts.size == 1:
-        wts = np.ones(X.shape[0])
+def model(X_train, Y_train, X_test, Y_test, error='poisson', link='log',
+          wts_train=np.array([0]), offset_train=np.array([0]), wts_test=np.array([0]), offset_test=np.array([0]))
+
+    if wts_train.size == 1:
+        wts_train = np.ones(X_train.shape[0])
+
+    if wts_test.size == 1:
+        wts_test = np.ones(X_train.shape[0])
+
 
     print error, link
     if link == 'log':
         lnk = sm.families.links.log
-        lY = np.log(Y)
     else:
-        lY = Y
         lnk = sm.families.links.identity
 
     if error == 'normal':
         fmly = sm.families.Gaussian(link=lnk)
-        fmly2 = sm.families.Gaussian(link=lnk)
-        lin = LinearRegression()
-        lin.fit(X, lY, sample_weight=wts)
-        #lin2 = LinearRegression()
-        #lin2.fit(wX, wtY)
-
+        glm = sm.GLM(Y_train, X_train, family=fmly)
     elif error == 'poisson':
         fmly = sm.families.Poisson(link=lnk)
-        fmly2 = sm.families.Poisson(link=lnk)
-
+        glm = sm.GLM(Y_train, X_train, family=fmly, offset=np.log(offset))
+    elif error == 'gamma':
+        fmly = sm.families.Gamma(link=lnk)
+        glm = sm.GLM(Y_train, X_train, family=fmly)
     else:
         print error, 'model not understood'
         sys.exit('model not understood')
 
 
-
-    glm = sm.GLM(Y, X, family=fmly, offset=np.log(offset))
     ft = glm.fit()
-    Yhat = ft.predict(X)
+    Yhat_train = ft.predict(X_train)
+    Yhat_test = ft.predict(X_test)
 
-    return Yhat, ft.summary()
+    return Yhat_train, Yhat_test, ft.summary()
 
 # right now I am reviewing the list of objectives and collecting my thoughts on how to model them
 # I am also replicating the poisson model results from here
@@ -70,7 +71,7 @@ def run():
     t0 = time.time()
     path = 'c:\\users\\dwright\\code\\NBIC_glamming\\'
     filename = path + 'GLM_Variable_Inputs_Historical_distr.txt'
-    readRows = None
+    readRows = 1000
 
     raw_train_data = pd.read_csv(filename, nrows=readRows)
 
@@ -187,7 +188,6 @@ def run():
     raw_train_data[yList[0]] = raw_train_data[yList[0]] + raw_train_data['Claim_ALAE_Incurred']
 
     print 'calculating frequency regression'
-
     freqVector = raw_train_data[yList[1]]
 
     features = [i for i in incldFreq if incldFreq[i] == True]
@@ -199,23 +199,14 @@ def run():
                 break
         print train_data[ftr].dtype, list(train_data[ftr].unique()), ftr
     #print train_data[binned_features]
-    X = np.asarray(train_data[binned_features]).astype('int64')
-    X = train_data[binned_features].astype('int64')
 
-    Y = np.asarray(freqVector).astype('int64')
-    Y = freqVector
-
-    Yhat, stats = model(X, Y, error='poisson', link='log', offset=Xweights)
-    print Yhat
 
     # here I am building a graph of the predicted frequency against the actual frequency
     # the groupings will be predicted frequency bins
-    outp = plotSingleHist('predicted_counts', np.ones(Yhat.shape), Yhat, Y,
-                          outPath, Ytype='', Ycount=np.ones(Yhat.shape))
+
+    outp = plotSingleHist(k='predicted_counts', weights=Xweights, train_data=Yhat, Y=Y,
+                          outPath=outPath, Ytype='', Ycount=np.ones(Yhat.shape))
     print outp
-
-    sys.exit()
-
     print 'calculating frequency regression'
     sevVector = raw_train_data[yList[0]]
     print 'calculating correlation'
@@ -223,22 +214,9 @@ def run():
     print 'writing correlation matrix'
     GenWriter = pd.ExcelWriter(outPath + '\\stats.xlsx', engine='xlsxwriter')
     cmatrix.to_excel(GenWriter, sheet_name='Correlation_Matrix')
-    resultsMatrix.to_excel(GenWriter, sheet_name='regr_results')
+    outp.to_excel(GenWriter, sheet_name='poisson_results')
 
     GenWriter.save()
-
-    for Ytype in yList:
-        X_tr, X_ts, Y_tr, Y_ts = train_test_split(train_data, raw_train_data.loc[:, Ytype], test_size=.3)
-        print X_tr.shape
-        lin.fit(X_tr, Y_tr)
-        Yhat = lin.predict(X_ts)
-        plt.scatter(Y_ts, Yhat)
-        plt.show()
-        plt.clf()
-        plt.close()
-
-        print 'params\n', lin.coef_()
-        print 'score for ', Ytype, lin.score(X_ts, Y_ts)
 
     xlDict = {}
     # need to run through the columns and collect features that correspond to these
@@ -253,34 +231,39 @@ def run():
             print 'feat2\n', feat2, feat2Vector.value_counts()
             #fig, ax = plt.subplots()
 
-            #ax.scatter(x=feat1Vector, y=feat2Vector, s=freqVector)
-            #ax.set_xticklabels(feat1Labels)
-            #ax.set_yticklabels(feat2Labels)
-            #plt.show()
-            #plt.clf()
-            #plt.close()
-
-            #fig, ax = plt.subplots()
-            #ax.scatter(x=feat1Vector, y=feat2Vector, s=secVector)
-            #ax.set_xticklabels(feat1Labels)
-            #ax.set_yticklabels(feat2Labels)
-
-            #plt.show()
-            #plt.clf()
-            #plt.close()
-
     for Ytype in yList:
         bins = {}
         if Ytype == 'Claim_Loss_Incurred':
             Ycount = raw_train_data.loc[raw_train_data[Ytype] > 0, 'Claim_Count']
-            X_train = train_data[raw_train_data[Ytype] > 0]
+            X = train_data[raw_train_data[Ytype] > 0]
             Y = raw_train_data.loc[raw_train_data[Ytype] > 0, Ytype]
             Xweights = Xweights[raw_train_data[Ytype] > 0]
+            error = 'gamma'
+            link = 'log'
+
         elif Ytype == 'Claim_Count':
             Ycount = raw_train_data['Claim_Count']
-            X_train = train_data
+            X = train_data
             Y = Ycount
             Xweights = raw_train_data['Exposure']
+            error = 'poisson'
+            link = 'log'
+
+        kf = Kfold(X.shape[0],n_folds=2)
+        skf = StratifiedKFold(freqVector,3)
+
+        for train, test in kf:
+            X_train = X.loc[train, binned_features].astype('int64')
+            Y_train = Y.iloc[train,:]
+            X_test = X.loc[test, binned_features].astype('int64')
+            Y_test = Y.iloc[test,:]
+            Xweights_train = Xweights.iloc[train,:]
+            Xweights_test = Xweights.iloc[test,:]
+
+        Yhat_Freq_train, Yhat_Freq_test, stats = model(X_train, Y_train, X_test, Y_test,
+                                                 error=error, link=link,
+                                                 offset_train=Xweights_train, offset_test=Xweights_test)
+
         else:
             print Ytype
             sys.exit("freq or sev?")
@@ -299,11 +282,11 @@ def run():
             else: # not so run binary and this one
 
                 #xlDict[Ytype + '_' + k + '_SR'] = plotSingleRegression(k, Xweights, train_data, Y, outPath, Ytype, Ycount)
-                xlDict[Ytype + '_' + k + '_Hist'] = plotSingleHist(k, Xweights, X_train, Y, outPath, Ytype, Ycount)
+                xlDict[Ytype + '_' + k + '_Hist'] = plotSingleHist(k, Xweights, X, Y, outPath, Ytype, Ycount)
 
         for bin in bins.keys():
             nm = Ytype + '_' + '_'.join(bins[bin][0].split('_')[:2]) + '_Hist'
-            xlDict[nm] = plotMultiHistogram(bins[bin], Xweights, X_train, Y, outPath, Ytype, Ycount)
+            xlDict[nm] = plotMultiHistogram(bins[bin], Xweights, X, Y, outPath, Ytype, Ycount)
 
     FreqWriter = pd.ExcelWriter(outPath + '\\frequency.xlsx', engine='xlsxwriter')
     SevWriter = pd.ExcelWriter(outPath + '\\severity.xlsx', engine='xlsxwriter')
@@ -452,7 +435,7 @@ def plotMultiHistogram(k, Xweights, train_data, Y, outPath, Ytype, Ycount):
     return outFrame
 
 
-def plotSingleHist(k, Xweights, train_data, Y, outPath, Ytype, Ycount):
+def plotSingleHist(k, weights, train_data, Y, outPath, Ytype, Ycount):
     print k
     if k == 'predicted_counts':
         trainerAr = train_data
@@ -463,10 +446,10 @@ def plotSingleHist(k, Xweights, train_data, Y, outPath, Ytype, Ycount):
 
     try:
         # organize the data in to a 4 column array
-        plotData = pd.DataFrame(np.vstack((trainerAr, Xweights, Y, Ycount)).T)
+        plotData = pd.DataFrame(np.vstack((trainerAr * weights, weights, Y, Ycount * weights)).T)
     except ValueError as e:
         print trainerAr.shape
-        print Xweights.shape
+        print weights.shape
         print Y.shape
         print Ycount.shape
 
@@ -649,11 +632,11 @@ def preprocess(train_data, bin=False):
 
         # we are activating the binning process and we
         # havn't excepted this variable from it via binSkip
-        print count
+        #print count
         count -= 1
-        if bin is True and binSkip == False:
+        if bin is True and binSkip is False:
             train_data[colName] = train_data[colName].fillna('Unknown')
-            print 'encoding', colName, tp, 'binskip?', binSkip
+            #print 'encoding', colName, tp, 'binskip?', binSkip
             train_data, newCols = binarize(train_data, colName)
         else:
             # replacing unknowns with the modal value
