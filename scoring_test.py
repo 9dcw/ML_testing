@@ -29,7 +29,7 @@ def main():
     return
 
 def model(X_train, Y_train, X_test, Y_test, error='poisson', link='log',
-          wts_train=np.array([0]), offset_train=np.array([0]), wts_test=np.array([0]), offset_test=np.array([0]))
+          wts_train=np.array([0]), offset_train=np.array([0]), wts_test=np.array([0]), offset_test=np.array([0])):
 
     if wts_train.size == 1:
         wts_train = np.ones(X_train.shape[0])
@@ -37,7 +37,7 @@ def model(X_train, Y_train, X_test, Y_test, error='poisson', link='log',
     if wts_test.size == 1:
         wts_test = np.ones(X_train.shape[0])
 
-
+    print offset_train
     print error, link
     if link == 'log':
         lnk = sm.families.links.log
@@ -49,18 +49,17 @@ def model(X_train, Y_train, X_test, Y_test, error='poisson', link='log',
         glm = sm.GLM(Y_train, X_train, family=fmly)
     elif error == 'poisson':
         fmly = sm.families.Poisson(link=lnk)
-        glm = sm.GLM(Y_train, X_train, family=fmly, offset=np.log(offset))
+        glm = sm.GLM(Y_train, X_train, family=fmly, offset=np.log(offset_train))
     elif error == 'gamma':
         fmly = sm.families.Gamma(link=lnk)
-        glm = sm.GLM(Y_train, X_train, family=fmly)
+        glm = sm.GLM(Y_train, X_train, family=fmly, weights=offset_train)
     else:
         print error, 'model not understood'
         sys.exit('model not understood')
 
-
     ft = glm.fit()
-    Yhat_train = ft.predict(X_train)
-    Yhat_test = ft.predict(X_test)
+    Yhat_train = ft.predict(X_train, offset=offset_train)
+    Yhat_test = ft.predict(X_test, offset=offset_test)
 
     return Yhat_train, Yhat_test, ft.summary()
 
@@ -184,7 +183,7 @@ def run():
 
     Xweights = raw_train_data.loc[:, 'Exposure']
     train_data = preprocess(train_data, bin=True)
-    yList = ['Claim_Loss_Incurred', 'Claim_Count']#, 'Claim_ALAE_Incurred']
+    yList = ['Claim_Count','Claim_Loss_Incurred']#, 'Claim_ALAE_Incurred']
     raw_train_data[yList[0]] = raw_train_data[yList[0]] + raw_train_data['Claim_ALAE_Incurred']
 
     print 'calculating frequency regression'
@@ -203,21 +202,7 @@ def run():
 
     # here I am building a graph of the predicted frequency against the actual frequency
     # the groupings will be predicted frequency bins
-
-    outp = plotSingleHist(k='predicted_counts', weights=Xweights, train_data=Yhat, Y=Y,
-                          outPath=outPath, Ytype='', Ycount=np.ones(Yhat.shape))
-    print outp
-    print 'calculating frequency regression'
-    sevVector = raw_train_data[yList[0]]
-    print 'calculating correlation'
-    cmatrix = pd.DataFrame(train_data.corr())
-    print 'writing correlation matrix'
     GenWriter = pd.ExcelWriter(outPath + '\\stats.xlsx', engine='xlsxwriter')
-    cmatrix.to_excel(GenWriter, sheet_name='Correlation_Matrix')
-    outp.to_excel(GenWriter, sheet_name='poisson_results')
-
-    GenWriter.save()
-
     xlDict = {}
     # need to run through the columns and collect features that correspond to these
     # we already have a mapping of the column to an index
@@ -240,6 +225,7 @@ def run():
             Xweights = Xweights[raw_train_data[Ytype] > 0]
             error = 'gamma'
             link = 'log'
+            Xweights=Ycount
 
         elif Ytype == 'Claim_Count':
             Ycount = raw_train_data['Claim_Count']
@@ -248,25 +234,29 @@ def run():
             Xweights = raw_train_data['Exposure']
             error = 'poisson'
             link = 'log'
+        else:
+            print Ytype
+            sys.exit("freq or sev?")
 
-        kf = Kfold(X.shape[0],n_folds=2)
+        kf = KFold(X.shape[0],n_folds=2)
         skf = StratifiedKFold(freqVector,3)
 
         for train, test in kf:
             X_train = X.loc[train, binned_features].astype('int64')
-            Y_train = Y.iloc[train,:]
+            Y_train = Y.iloc[train]
+            Xweights_train = Xweights.iloc[train]
             X_test = X.loc[test, binned_features].astype('int64')
-            Y_test = Y.iloc[test,:]
-            Xweights_train = Xweights.iloc[train,:]
-            Xweights_test = Xweights.iloc[test,:]
+            Y_test = Y.iloc[test]
+            Xweights_test = Xweights.iloc[test]
 
-        Yhat_Freq_train, Yhat_Freq_test, stats = model(X_train, Y_train, X_test, Y_test,
+        Yhat_train, Yhat_test, stats = model(X_train, Y_train, X_test, Y_test,
                                                  error=error, link=link,
                                                  offset_train=Xweights_train, offset_test=Xweights_test)
 
-        else:
-            print Ytype
-            sys.exit("freq or sev?")
+
+        outp = plotSingleHist(k='predicted_counts', weights=Xweights_test, train_data=Yhat_test, Y=Y_test,
+                              outPath=outPath, Ytype='', Ycount=np.ones(Yhat_test.shape))
+        outp.to_excel(GenWriter, sheet_name='poisson_results')
         for k in train_data.columns:
             if 'binned' in k:
                 root = k.split('__')[0]
@@ -295,6 +285,13 @@ def run():
     linkSheetS = SevWriter.book.add_worksheet('index')
     Fcounter = 0
     Scounter = 0
+
+    print 'calculating correlation'
+    cmatrix = pd.DataFrame(train_data.corr())
+    print 'writing correlation matrix'
+    cmatrix.to_excel(GenWriter, sheet_name='Correlation_Matrix')
+    GenWriter.save()
+
 
     for out in xlDict:
 
@@ -356,37 +353,6 @@ def run():
     FreqWriter.save()
     print (time.time() - t0) / 60
     return
-
-
-def plotSingleRegression(k, Xweights, train_data,Y, outPath, Ytype, Ycount):
-    lin = LinearRegression()
-    ax1 = pl.figure().add_subplot(111)
-    print k, Ytype, 'numeric field'
-    trainer = train_data.loc[:, k].astype('float').reshape(-1, 1)
-    try:
-        lin.fit(trainer, Y, sample_weight=Xweights)
-    except ValueError as e:
-        print trainer
-        raise
-    coef = lin.coef_[0]
-    ax1.scatter(trainer, Y, color='black')
-    prediction = lin.predict(trainer)
-    ax1.plot(trainer, prediction, color='blue')
-    ax1.set_ylabel(Ytype)
-    #axes.annotate('coefficient:' + str(coef), xy=(float(trainer[-1]), float(prediction[-1]))
-    #             ,xycoords='axes fraction',horizontalalignment='right', verticalalignment='right')
-    t = k + '\ncoefficient: ' + str(coef)
-    plt.title(t)
-    plt.savefig(outPath + '\\' + k + '_' + Ytype + '_LinearRegression')
-    plt.clf()
-    plt.close()
-    #print trainer.shape
-    #print Y.shape
-    #print prediction.shape
-    out = pd.concat([pd.DataFrame(trainer), pd.DataFrame(Y), pd.DataFrame(prediction)], axis=1)
-
-    return out
-
 
 def plotMultiHistogram(k, Xweights, train_data, Y, outPath, Ytype, Ycount):
     fig, ax1 = plt.subplots()
